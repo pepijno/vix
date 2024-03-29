@@ -1,3 +1,6 @@
+#include "list.h"
+#include "buffer.h"
+
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -5,12 +8,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+__attribute__((cold)) __attribute__((noreturn))
+__attribute__((format(printf, 1, 2))) void
+panic(char *format, ...);
+
+void unreachable(void) { panic("unreachable"); }
+
 typedef enum {
   TOKEN_IDENTIFIER,
   TOKEN_ASSIGN,
   TOKEN_DOT,
   TOKEN_COMMA,
-  TOKEN_STRING,
+  TOKEN_STRING_LITERAL,
   TOKEN_OPEN_BRACE,
   TOKEN_CLOSE_BRACE,
   TOKEN_OPEN_PAREN,
@@ -26,14 +35,14 @@ typedef struct {
 
 typedef struct {
   char *input;
-  int start;
-  int current;
-  int line;
+  size_t start;
+  size_t current;
+  size_t line;
 } Lexer;
 
 typedef struct {
-  int size;
-  int current;
+  size_t size;
+  size_t current;
   Token *tokens;
 } Tokens;
 
@@ -97,13 +106,11 @@ void lexer_string(Lexer *lexer, Tokens *tokens) {
   int size = (lexer->current - 1) - (lexer->start + 1);
   char *content = malloc(size * sizeof(char));
   strncpy(content, lexer->input + lexer->start + 1, size);
-  Token token = {.type = TOKEN_STRING, .content = content};
+  Token token = {.type = TOKEN_STRING_LITERAL, .content = content};
   tokens_add(tokens, &token);
 }
 
-bool is_allowed_identifier_char(char c) {
-  return isalnum(c) || c == '_';
-}
+bool is_allowed_identifier_char(char c) { return isalnum(c) || c == '_'; }
 
 void lexer_identifier(Lexer *lexer, Tokens *tokens) {
   while (is_allowed_identifier_char(lexer_peek(lexer))) {
@@ -157,10 +164,10 @@ void lexer_next_token(Lexer *lexer, Tokens *tokens) {
     break;
   default:
     if (is_allowed_identifier_char(c)) {
-        lexer_identifier(lexer, tokens);
+      lexer_identifier(lexer, tokens);
     } else {
       printf("Unexpected character: %c\n", c);
-      }
+    }
     break;
   }
 }
@@ -181,8 +188,8 @@ void print_token(Token *token) {
   case TOKEN_ASSIGN:
     printf("TOKEN_ASSIGN\n");
     break;
-  case TOKEN_STRING:
-    printf("TOKEN_STRING: %s\n", token->content);
+  case TOKEN_STRING_LITERAL:
+    printf("TOKEN_STRING_LITERAL: %s\n", token->content);
     break;
   case TOKEN_OPEN_BRACE:
     printf("TOKEN_OPEN_BRACE\n");
@@ -211,70 +218,372 @@ void print_token(Token *token) {
   }
 }
 
+typedef enum {
+  NODE_STRING_LITERAL,
+  NODE_OBJECT,
+  NODE_PROPERTY,
+  NODE_IDENTIFIER,
+  NODE_FREE_OBJECT_COPY,
+  NODE_OBJECT_PROPERTY_ACCESS,
+  NODE_ROOT
+} NodeType;
+
 typedef struct {
-  Tokens* tokens;
+  Tokens *tokens;
   int current;
 } Parser;
 
-Parser init_parser(Tokens* tokens) {
-  return (Parser){ .tokens = tokens, .current = 0 };
+void ast_error(Parser *parser, Token *token, char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  // char *msg = printf(format, ap);
+  va_end(ap);
 }
 
-bool parser_is_at_end(Parser* parser) {
-  return parser->current == parser->tokens->size;
+struct AstNode;
+
+typedef struct {
+  char *content;
+} AstStringLiteral;
+
+typedef struct {
+  char *content;
+} AstIdentifier;
+
+typedef struct {
+  LIST_OF(struct AstNode*) free_list;
+  LIST_OF(struct AstNode*) property_list;
+} AstObject;
+
+typedef struct {
+  struct AstNode *identifier;
+  struct AstNode *object_result;
+} AstProperty;
+
+typedef struct {
+  struct AstNode *object;
+  struct AstNode *property;
+} AstObjectPropertyAccess;
+
+typedef struct {
+  struct AstNode *object;
+  LIST_OF(struct AstNode*) property_list;
+} AstFreeObjectCopy;
+
+typedef struct {
+  LIST_OF(struct AstNode*) list;
+} AstRoot;
+
+typedef struct AstNode {
+  NodeType type;
+  int line;
+  int column;
+  union {
+    AstStringLiteral string_literal;
+    AstObject object;
+    AstProperty property;
+    AstIdentifier identifier;
+    AstObjectPropertyAccess object_property_access;
+    AstFreeObjectCopy free_object_copy;
+    AstRoot root;
+  } data;
+} AstNode;
+
+AstNode* init_node(NodeType type) {
+  AstNode* node = malloc(sizeof(AstNode));
+  node->type = type;
+  node->line = 0;
+  node->column = 0;
+  return node;
 }
 
-Token parser_peek(Parser* parser) {
-  return parser->tokens->tokens[parser->current];
+Parser init_parser(Tokens *tokens) {
+  return (Parser){.tokens = tokens, .current = 0};
 }
 
-Token parser_previous(Parser* parser) {
-  return parser->tokens->tokens[parser->current - 1];
-}
+AstNode *parse_property(Parser *parser, size_t *token_index);
+AstNode *parse_object_result(Parser *parser, size_t *token_index);
 
-Token parser_advance(Parser* parser) {
-  if (!parser_is_at_end(parser)) {
-    parser->current++;
-  }
-  return parser_previous(parser);
-}
-
-bool parser_check(Parser* parser, TokenType type) {
-  if (parser_is_at_end(parser)) {
-    return false;
+// identifier ::= [A-Za-z][A-Za-z0-9_]*
+AstNode *parse_identifier(Parser *parser, size_t *token_index) {
+  Token *token = &(parser->tokens->tokens[*token_index]);
+  if (token->type == TOKEN_IDENTIFIER) {
+    *token_index += 1;
+    AstNode* node = init_node(NODE_IDENTIFIER);
+    node->data.identifier.content = token->content;
+    return node;
   } else {
-    return parser_peek(parser).type == type;
+    // TODO error;
+    return NULL;
   }
 }
 
-bool match(Parser* parser, int count, ...) {
-  va_list argp;
-  va_start(argp, count);
-  for(int i = 0; i < count; ++i) {
-    TokenType tokenType = va_arg(argp, TokenType);
-    if (parser_check(parser, tokenType)) {
-      parser_advance(parser);
-      return true;
+// object ::= (identifier+ ">")? "{" property* "}"
+AstNode *parse_object(Parser *parser, size_t *token_index) {
+  Token *token = &(parser->tokens->tokens[*token_index]);
+
+  if (token->type != TOKEN_IDENTIFIER && token->type != TOKEN_OPEN_BRACE) {
+    return NULL;
+  }
+
+  AstNode *node = init_node(NODE_OBJECT);
+  LIST_INIT(node->data.object.free_list);
+  LIST_INIT(node->data.object.property_list);
+
+  while (token->type == TOKEN_IDENTIFIER) {
+    AstNode *identifier = parse_identifier(parser, token_index);
+    if (!identifier) {
+      // TODO error
+      return NULL;
+    } else {
+      LIST_PUSH_BACK(node->data.object.free_list, identifier);
+    }
+    token = &(parser->tokens->tokens[*token_index]);
+  }
+
+  if (LIST_IS_NON_EMPTY(node->data.object.free_list)) {
+    if (token->type == TOKEN_GREATER_THAN) {
+      *token_index += 1;
+      token = &(parser->tokens->tokens[*token_index]);
+    } else {
+      // TODO error
+      return NULL;
     }
   }
-  va_end(argp);
-  return false;
+
+  if (token->type == TOKEN_OPEN_BRACE) {
+    *token_index += 1;
+  } else {
+    // TODO error
+    return NULL;
+  }
+
+  while (true) {
+    AstNode *property = parse_property(parser, token_index);
+    if (property) {
+      LIST_PUSH_BACK(node->data.object.property_list, property);
+    }
+
+    token = &(parser->tokens->tokens[*token_index]);
+    if (token->type == TOKEN_CLOSE_BRACE) {
+      *token_index += 1;
+      return node;
+    } else if (property) {
+      continue;
+    } else {
+      return NULL;
+      // TODO error
+    }
+  }
+
+  unreachable();
 }
 
-void parse_object(Parser* parser) {
+// property ::= identifier assignment object_result
+AstNode *parse_property(Parser *parser, size_t *token_index) {
+  AstNode* identifier = parse_identifier(parser, token_index);
+
+  if (!identifier) {
+    // TODO error;
+    return NULL;
+  }
+
+  Token *equals_token = &(parser->tokens->tokens[*token_index]);
+  if (equals_token->type == TOKEN_ASSIGN) {
+    *token_index += 1;
+  } else {
+    // TODO error
+    return NULL;
+  }
+
+  AstNode *object_result = parse_object_result(parser, token_index);
+  if (!object_result) {
+    // TODO error
+    return NULL;
+  }
+
+  AstNode* node = init_node(NODE_PROPERTY);
+  node->data.property.identifier = identifier;
+  node->data.property.object_result = object_result;
+  return node;
 }
 
-int main() {
-  char input[] = "person = age > { first_name_length = \"John\".length\n    last_name = my_last_name(\"Doe\", \"Doe\") }";
+// object_property ::= identifier ("(" object_result ("," object_result)+ ")" )
+// ("." object_property)?
+AstNode *parse_object_property(Parser *parser, size_t *token_index) {
+  Token *token = &(parser->tokens->tokens[*token_index]);
+  if (token->type == TOKEN_IDENTIFIER) {
+    AstNode *node = parse_identifier(parser, token_index);
+    if (!node) {
+      unreachable();
+    }
+
+    Token *next_token = &(parser->tokens->tokens[*token_index]);
+
+    if (next_token->type == TOKEN_OPEN_PAREN) {
+      *token_index += 1;
+      AstNode *free_copy = init_node(NODE_FREE_OBJECT_COPY);
+      LIST_INIT(free_copy->data.free_object_copy.property_list);
+      while(true) {
+        AstNode* object_result = parse_object_result(parser, token_index);
+        if (object_result) {
+          LIST_PUSH_BACK(free_copy->data.free_object_copy.property_list, object_result);
+        } else {
+          // TODO error
+          return NULL;
+        }
+
+        next_token = &(parser->tokens->tokens[*token_index]);
+        if(next_token->type == TOKEN_CLOSE_PAREN) {
+          *token_index += 1;
+          next_token = &(parser->tokens->tokens[*token_index]);
+          node = free_copy;
+          break;
+        } else if(next_token->type == TOKEN_COMMA) {
+          *token_index += 1;
+        } else {
+          // TODO error
+          return NULL;
+        }
+      } while (next_token->type == TOKEN_COMMA);
+    }
+
+    if (next_token->type == TOKEN_DOT) {
+      *token_index += 1;
+      AstNode *object_property = parse_object_property(parser, token_index);
+      if (object_property) {
+        AstNode* n = init_node(NODE_OBJECT_PROPERTY_ACCESS);
+        n->data.object_property_access.object = node;
+        n->data.object_property_access.property = object_property;
+        return n;
+      } else {
+        // TODO error
+        return NULL;
+      }
+    } else {
+      return node;
+    }
+  } else {
+    // TODO error
+    return NULL;
+  }
+}
+
+AstNode* parse_string_literal(Parser* parser, size_t *token_index) {
+  Token *token = &(parser->tokens->tokens[*token_index]);
+  if (token->type == TOKEN_STRING_LITERAL) {
+    *token_index += 1;
+    AstNode* node = init_node(NODE_STRING_LITERAL);
+    node->data.string_literal.content = token->content;
+    return node;
+  } else {
+    // TODO error
+    return NULL;
+  }
+}
+
+// object_result ::= object | STRING | object_property
+AstNode *parse_object_result(Parser *parser, size_t *token_index) {
+  AstNode *node = parse_object(parser, token_index);
+  if (!node) {
+    node = parse_string_literal(parser, token_index);
+  }
+  if (!node) {
+    node = parse_object_property(parser, token_index);
+  }
+
+  if (node) {
+    return node;
+  } else {
+    // TODO error
+    return NULL;
+  }
+  unreachable();
+}
+
+// root ::= property*
+AstNode *parse_root(Parser* parser, size_t *token_index) {
+  Token *token = &(parser->tokens->tokens[*token_index]);
+  AstNode* node = init_node(NODE_ROOT);
+  LIST_INIT(node->data.root.list);
+  while (token->type != TOKEN_EOF) {
+    AstNode *property = parse_property(parser, token_index);
+    if (property) {
+      LIST_PUSH_BACK(node->data.root.list, property);
+    } else {
+      // TODO error
+      return NULL;
+    }
+    token = &(parser->tokens->tokens[*token_index]);
+  }
+  return node;
+}
+
+void printAst(AstNode* node, int indent) {
+  if (node->type == NODE_ROOT) {
+    printf("%*sNODE_ROOT(\n", indent, "");
+    for (size_t i = 0; i < LIST_SIZE(node->data.root.list); ++i) {
+      printAst(LIST_AT(node->data.root.list, i), indent + 2);
+    }
+    printf("%*s)\n", indent, "");
+  } else if (node->type == NODE_PROPERTY) {
+    printf("%*sNODE_PROPERTY(", indent, "");
+    printAst(node->data.property.identifier, indent);
+    printf(", ");
+    printAst(node->data.property.object_result, indent);
+    printf(")\n");
+  } else if (node->type == NODE_IDENTIFIER) {
+    printf("NODE_IDENTIFIER(%s)", node->data.identifier.content);
+  } else if (node->type == NODE_STRING_LITERAL) {
+    printf("NODE_STRING_LITERAL(%s)", node->data.string_literal.content);
+  } else if (node->type == NODE_OBJECT) {
+    printf("NODE_OBJECT(");
+    for (size_t i = 0; i < LIST_SIZE(node->data.object.free_list); ++i) {
+      if (i != 0) {
+        printf(" ");
+      }
+      printAst(LIST_AT(node->data.object.free_list, i), indent + 2);
+    }
+    printf("\n");
+    for (size_t i = 0; i < LIST_SIZE(node->data.object.property_list); ++i) {
+      printAst(LIST_AT(node->data.object.property_list, i), indent + 2);
+    }
+    printf("%*s)", indent, "");
+  } else if (node->type == NODE_FREE_OBJECT_COPY) {
+    printf("NODE_FREE_OBJECT_COPY(");
+    for (size_t i = 0; i < LIST_SIZE(node->data.free_object_copy.property_list); ++i) {
+      if (i != 0) {
+        printf(", ");
+      }
+      printAst(LIST_AT(node->data.free_object_copy.property_list, i), indent);
+    }
+    printf(")");
+  } else if (node->type == NODE_OBJECT_PROPERTY_ACCESS) {
+    printf("NODE_OBJECT_PROPERTY_ACCESS(");
+    printAst(node->data.object_property_access.object, indent);
+    printf(", ");
+    printAst(node->data.object_property_access.property, indent);
+    printf(")");
+  }
+}
+
+int main(void) {
+  char input[] = "person = height length > {"
+"    name = \"John\""
+"    age = name"
+"}";
   Lexer lexer = init_lexer(input);
   Tokens tokens = init_tokens(1);
   lexer_scan_tokens(&lexer, &tokens);
-  for (int i = 0; i < tokens.size; ++i) {
+  for (size_t i = 0; i < tokens.size; ++i) {
     print_token(&tokens.tokens[i]);
     if (tokens.tokens[i].type == TOKEN_EOF) {
       break;
     }
   }
   Parser parser = init_parser(&tokens);
+  size_t token_index = 0;
+  AstNode* root = parse_root(&parser, &token_index);
+  printAst(root, 0);
   return 0;
 }
