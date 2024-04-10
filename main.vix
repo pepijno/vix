@@ -1,0 +1,21 @@
+true = whenTrue whenFalse > {
+	if = whenTrue;
+};
+false = whenTrue whenFalse > {
+	if = whenFalse;
+};
+
+context = value > {
+	then = action > {
+		...this(action(value));
+	};
+	do = {
+		...this(value);
+	};
+};
+
+person = height length > {
+    name = "John";
+    age = name;
+    l = 5;
+};
