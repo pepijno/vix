@@ -1,5 +1,4 @@
-#ifndef ALLOCATOR_H
-#define ALLOCATOR_H
+#pragma once
 
 #include <assert.h>
 #include <stdint.h>
@@ -123,5 +122,3 @@ static void empty_free(void* ptr, size_t const size, void* context) {
     (struct allocator_t) {                                \
         arena_allocate, arena_reallocate, empty_free, (a) \
     }
-
-#endif

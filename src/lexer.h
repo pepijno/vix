@@ -1,8 +1,6 @@
-#ifndef LEXER_H
-#define LEXER_H
+#pragma once
 
 #include "allocator.h"
-#include <stddef.h>
 
 enum token_type_t {
     TOKEN_IDENTIFIER,
@@ -70,5 +68,3 @@ void tokenize(
 );
 char const* token_name(enum token_type_t const type);
 void print_tokens(char const* const source, token_ptr_array_t tokens);
-
-#endif

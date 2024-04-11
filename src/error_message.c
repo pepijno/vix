@@ -48,7 +48,6 @@ static void set_color_posix(enum term_color_t const color) {
 }
 
 static void print_error_message_type(
-    struct allocator_t* allocator,
     struct error_message_t const error_message[static const 1],
     enum error_color_t const color, enum error_type_t const error_type
 ) {
@@ -101,16 +100,15 @@ static void print_error_message_type(
 
     for (size_t i = 0; i < array_length_unsigned(error_message->notes); ++i) {
         struct error_message_t const* const note = error_message->notes[i];
-        print_error_message_type(allocator, note, color, ERROR_TYPE_NOTE);
+        print_error_message_type(note, color, ERROR_TYPE_NOTE);
     }
 }
 
 void print_error_message(
-    struct allocator_t* allocator,
     struct error_message_t const error_message[static const 1],
     enum error_color_t const color
 ) {
-    print_error_message_type(allocator, error_message, color, ERROR_TYPE_ERROR);
+    print_error_message_type(error_message, color, ERROR_TYPE_ERROR);
 }
 
 void error_message_add_note(

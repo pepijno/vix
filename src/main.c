@@ -1,4 +1,5 @@
 #include "allocator.h"
+#include "analyser.h"
 #include "array.h"
 #include "ast_render.h"
 #include "error_message.h"
@@ -59,7 +60,7 @@ int main(int const argc, char const* const argv[]) {
                 source, tokenized.line_offsets, tokenized.error
             );
 
-        print_error_message(&allocator, &error_message, ERROR_COLOR_ON);
+        print_error_message(&error_message, ERROR_COLOR_ON);
         exit(1);
     }
 
@@ -76,6 +77,8 @@ int main(int const argc, char const* const argv[]) {
     assert(import_entry.root != nullptr);
 
     ast_print(stdout, import_entry.root, 0);
+
+    analyse(&allocator, import_entry.root);
 
     arena_reset(&arena);
     arena_free(&arena);

@@ -6,7 +6,6 @@
 #include "util.h"
 
 #include <assert.h>
-#include <stdarg.h>
 #include <string.h>
 
 struct parse_context_t {
@@ -20,25 +19,15 @@ struct parse_context_t {
 
 static void ast_error(
     struct parse_context_t const parse_context[static const 1],
-    struct token_t const token[static const 1], char const* const format, ...
+    struct token_t const token[static const 1], char const* const message
 ) {
-    va_list ap;
-    va_start(ap, format);
-    int required_size = vsnprintf(nullptr, 0, format, ap);
-    char* message =
-        str_new_length(parse_context->allocator, nullptr, required_size);
-    vsnprintf(message, required_size, format, ap);
-    va_end(ap);
-
     struct error_message_t const error = error_message_create_with_line(
         parse_context->allocator, parse_context->owner->path, token->start_line,
         token->start_column, parse_context->owner->source_code,
         parse_context->owner->line_offsets, message
     );
 
-    print_error_message(
-        parse_context->allocator, &error, parse_context->error_color
-    );
+    print_error_message(&error, parse_context->error_color);
     exit(EXIT_FAILURE);
 }
 
@@ -59,8 +48,10 @@ static void ast_expect_token(
 
     ast_error(
         parse_context, token,
-        str_new(parse_context->allocator, "expected token '%s', found '%s'"),
-        token_name(type), token_name(token->type)
+        str_printf(
+            parse_context->allocator, "expected token '%s', found '%s'",
+            token_name(type), token_name(token->type)
+        )
     );
 }
 
@@ -75,17 +66,20 @@ static struct token_t* ast_eat_token(
 }
 
 static struct ast_node_t* ast_node_create(
-    struct allocator_t* allocator, enum node_type_t const type,
+    struct parse_context_t const parse_context[static const 1],
+    enum node_type_t const type,
     struct token_t const first_token[static const 1]
 ) {
     struct ast_node_t node = {
         .type   = type,
         .line   = first_token->start_line,
         .column = first_token->start_column,
+        .owner  = parse_context->owner,
     };
-    struct ast_node_t* const ptr = (struct ast_node_t*) allocator->allocate(
-        sizeof(struct ast_node_t), allocator->context
-    );
+    struct ast_node_t* const ptr =
+        (struct ast_node_t*) parse_context->allocator->allocate(
+            sizeof(struct ast_node_t), parse_context->allocator->context
+        );
     memcpy(ptr, &node, sizeof(struct ast_node_t));
     return ptr;
 }
@@ -131,10 +125,10 @@ static struct ast_node_t* ast_parse_identifier(
     struct token_t const* const token = (*parse_context->tokens)[*token_index];
     if (token->type == TOKEN_IDENTIFIER) {
         *token_index += 1;
-        struct ast_node_t* const node = ast_node_create(
-            parse_context->allocator, NODE_TYPE_IDENTIFIER, token
-        );
+        struct ast_node_t* const node =
+            ast_node_create(parse_context, NODE_TYPE_IDENTIFIER, token);
         node->data.identifier.content = token_buffer(token);
+        assert(str_length(node->data.identifier.content) != 0);
         return node;
     } else {
         return nullptr;
@@ -155,9 +149,8 @@ static struct ast_node_t* ast_parse_property(
     struct token_t const* const assign_token =
         ast_eat_token(parse_context, token_index, TOKEN_ASSIGN);
 
-    struct ast_node_t* const node = ast_node_create(
-        parse_context->allocator, NODE_TYPE_PROPERTY, assign_token
-    );
+    struct ast_node_t* const node =
+        ast_node_create(parse_context, NODE_TYPE_PROPERTY, assign_token);
     node->data.property.identifier = identifier;
     node->data.property.object_result =
         ast_parse_object_result(parse_context, token_index);
@@ -212,9 +205,8 @@ static struct ast_node_t* ast_parse_string_literal(
     struct token_t const* const token = (*parse_context->tokens)[*token_index];
     if (token->type == TOKEN_STRING_LITERAL) {
         *token_index += 1;
-        struct ast_node_t* const node = ast_node_create(
-            parse_context->allocator, NODE_TYPE_STRING_LITERAL, token
-        );
+        struct ast_node_t* const node =
+            ast_node_create(parse_context, NODE_TYPE_STRING_LITERAL, token);
         node->data.string_literal.content = token_buffer(token);
         return node;
     } else {
@@ -229,9 +221,8 @@ static struct ast_node_t* ast_parse_char_literal(
     struct token_t const* const token = (*parse_context->tokens)[*token_index];
     if (token->type == TOKEN_CHAR_LITERAL) {
         *token_index += 1;
-        struct ast_node_t* const node = ast_node_create(
-            parse_context->allocator, NODE_TYPE_CHAR_LITERAL, token
-        );
+        struct ast_node_t* const node =
+            ast_node_create(parse_context, NODE_TYPE_CHAR_LITERAL, token);
         node->data.char_literal.c = token->data.char_literal.c;
         return node;
     } else {
@@ -247,7 +238,7 @@ static struct ast_node_t* ast_parse_integer_literal(
     if (token->type == TOKEN_INT) {
         *token_index += 1;
         struct ast_node_t* const node =
-            ast_node_create(parse_context->allocator, NODE_TYPE_INTEGER, token);
+            ast_node_create(parse_context, NODE_TYPE_INTEGER, token);
         node->data.integer.content = token->data.integer.integer;
         return node;
     } else {
@@ -275,7 +266,7 @@ static struct ast_node_t* ast_parse_object_property(
     while (next_token->type == TOKEN_OPEN_PAREN) {
         *token_index += 1;
         struct ast_node_t* const free_copy = ast_node_create(
-            parse_context->allocator, NODE_TYPE_FREE_OBJECT_COPY, next_token
+            parse_context, NODE_TYPE_FREE_OBJECT_COPY, next_token
         );
         free_copy->data.free_object_copy.property_list =
             array(struct ast_node_t*, parse_context->allocator);
@@ -314,8 +305,7 @@ static struct ast_node_t* ast_parse_object_property(
             ast_parse_object_property(parse_context, token_index);
         if (object_property) {
             struct ast_node_t* const n = ast_node_create(
-                parse_context->allocator, NODE_TYPE_OBJECT_PROPERTY_ACCESS,
-                next_token
+                parse_context, NODE_TYPE_OBJECT_PROPERTY_ACCESS, next_token
             );
             n->data.object_property_access.object   = node;
             n->data.object_property_access.property = object_property;
@@ -337,7 +327,7 @@ static struct ast_node_t* ast_parse_object(
     struct token_t const* token = (*parse_context->tokens)[*token_index];
 
     struct ast_node_t* const object =
-        ast_node_create(parse_context->allocator, NODE_TYPE_OBJECT, token);
+        ast_node_create(parse_context, NODE_TYPE_OBJECT, token);
     object->data.object.free_list =
         array(struct ast_node_t*, parse_context->allocator);
     object->data.object.property_list =
@@ -412,9 +402,8 @@ static struct ast_node_t* ast_parse_decorator(
         *token_index += 1;
         struct ast_node_t* const object_result =
             ast_parse_object_result(parse_context, token_index);
-        struct ast_node_t* const node = ast_node_create(
-            parse_context->allocator, NODE_TYPE_DECORATOR, token
-        );
+        struct ast_node_t* const node =
+            ast_node_create(parse_context, NODE_TYPE_DECORATOR, token);
         if (object_result) {
             node->data.decorator.object = object_result;
         } else {
@@ -452,8 +441,7 @@ static struct ast_node_t* ast_parse_root(
     size_t token_index[static const 1]
 ) {
     struct ast_node_t* const node = ast_node_create(
-        parse_context->allocator, NODE_TYPE_ROOT,
-        (*parse_context->tokens)[*token_index]
+        parse_context, NODE_TYPE_ROOT, (*parse_context->tokens)[*token_index]
     );
     node->data.root.list = array(struct ast_node_t*, parse_context->allocator);
     ast_parse_root_node(parse_context, token_index, &node->data.root.list);

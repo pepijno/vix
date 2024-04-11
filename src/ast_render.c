@@ -45,10 +45,13 @@ static void ast_print_visit(struct ast_node_t** node_ptr, void* context) {
 
     fprintf(ast_print->f, "%s ", node_type_string(node->type));
     if (node->type == NODE_TYPE_IDENTIFIER) {
-        fwrite(
-            node->data.identifier.content, 1,
-            str_length(node->data.identifier.content), stdout
-        );
+        fprintf(ast_print->f, "\"%s\"", node->data.identifier.content);
+    } else if (node->type == NODE_TYPE_STRING_LITERAL) {
+        fprintf(ast_print->f, "\"%s\"", node->data.string_literal.content);
+    } else if (node->type == NODE_TYPE_CHAR_LITERAL) {
+        fprintf(ast_print->f, "'%c'", node->data.char_literal.c);
+    } else if (node->type == NODE_TYPE_INTEGER) {
+        fprintf(ast_print->f, "\"%s\"", node->data.integer.content);
     }
     fprintf(ast_print->f, "\n");
 

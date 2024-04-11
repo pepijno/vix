@@ -1,7 +1,8 @@
-#ifndef STR_H
-#define STR_H
+#pragma once
 
 #include "allocator.h"
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 struct str_header_t {
@@ -98,4 +99,44 @@ static char* str_append_char(char* str, char const c) {
     return new_str;
 }
 
-#endif
+static bool str_equal(char const* const str1, char const* const str2) {
+    if (str_length(str1) != str_length(str2)) {
+        return false;
+    }
+    if (str_length(str1) == 0 || str1 == str2) {
+        return true;
+    }
+    for (size_t i = 0; i < str_length(str1); ++i) {
+        if (str1[i] != str2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static char* str_vprintf(struct allocator_t allocator[static const 1], char const* const format, va_list ap) {
+    va_list ap2;
+    va_copy(ap2, ap);
+
+    int length1 = vsnprintf(nullptr, 0, format, ap);
+    assert(length1 >= 0);
+
+    size_t const required_length = length1 + 1;
+
+    char* str = str_new_length(allocator, nullptr, required_length);
+
+    int length2 = vsnprintf(str, required_length, format, ap2);
+    assert(length1 == length2);
+
+    va_end(ap2);
+
+    return str;
+}
+
+static char* str_printf(struct allocator_t allocator[static const 1], char const* const format, ...) {
+    va_list ap;
+    va_start(ap, format);
+    char* str= str_vprintf(allocator, format, ap);
+    va_end(ap);
+    return str;
+}

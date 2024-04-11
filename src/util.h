@@ -1,5 +1,4 @@
-#ifndef UTIL_H
-#define UTIL_H
+#pragma once
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -18,5 +17,3 @@
 [[__noreturn__]] static void vix_unreachable(void) {
     vix_panic("unreachable");
 }
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef PARSER_H
-#define PARSER_H
+#pragma once
 
 #include "error_message.h"
 #include "lexer.h"
@@ -67,10 +66,13 @@ struct ast_root_t {
     ast_node_ptr_array_t list;
 };
 
+struct import_table_entry_t;
+
 struct ast_node_t {
     enum node_type_t const type;
     size_t const line;
     size_t const column;
+    struct import_table_entry_t* owner;
     union {
         struct ast_string_literal_t string_literal;
         struct ast_char_literal_t char_literal;
@@ -102,5 +104,3 @@ struct ast_node_t* ast_parse(
     struct import_table_entry_t owner[static const 1],
     enum error_color_t const error_color
 );
-
-#endif

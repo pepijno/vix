@@ -1,5 +1,4 @@
-#ifndef ERROR_MESSAGE_H
-#define ERROR_MESSAGE_H
+#pragma once
 
 #include "allocator.h"
 
@@ -19,7 +18,6 @@ struct error_message_t {
 };
 
 void print_error_message(
-    struct allocator_t* allocator,
     struct error_message_t const error_message[static const 1],
     enum error_color_t const color
 );
@@ -40,5 +38,3 @@ struct error_message_t error_message_create_with_line(
     size_t const line, size_t const column, char const* const source,
     size_t const* const line_offsets, char const* const message
 );
-
-#endif

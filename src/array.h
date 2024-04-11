@@ -1,9 +1,6 @@
-#ifndef ARRAY_H
-#define ARRAY_H
+#pragma once
 
 #include "allocator.h"
-
-#include <stddef.h>
 
 struct array_header_t {
     size_t item_size;
@@ -90,5 +87,3 @@ static void* array_grow(
     ((a) = array_grow((a), 1, 0), (a)[array_header(a)->length] = (v), \
      &(a)[array_header(a)->length++])
 #define array_last(a) ((a)[array_header(a)->length - 1])
-
-#endif
