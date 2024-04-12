@@ -12,7 +12,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static char* os_fetch_file(struct allocator_t* allocator, FILE* const f) {
+static char* os_fetch_file(
+    struct allocator_t allocator[static const 1], FILE f[static const 1]
+) {
     static size_t const buffer_size = 0x2000;
     char* str = str_new_length(allocator, nullptr, buffer_size);
     size_t actual_buffer_length = 0;
@@ -64,7 +66,7 @@ int main(int const argc, char const* const argv[]) {
         exit(1);
     }
 
-    print_tokens(source, *tokenized.tokens);
+    // print_tokens(source, *tokenized.tokens);
 
     struct import_table_entry_t import_entry = {
         .source_code  = source,
@@ -76,9 +78,24 @@ int main(int const argc, char const* const argv[]) {
     );
     assert(import_entry.root != nullptr);
 
-    ast_print(stdout, import_entry.root, 0);
+    // ast_print(stdout, import_entry.root, 0);
 
-    analyse(&allocator, import_entry.root);
+    struct code_gen_t code_gen = {
+        .error_color = ERROR_COLOR_ON,
+        .allocator = &allocator,
+        .root_scope =
+            {
+                         .parent      = nullptr,
+                         .source_node = import_entry.root,
+                         },
+    };
+    code_gen.errors                = array(struct error_message_t*, &allocator);
+    code_gen.root_scope.properties = array(struct ast_node_t*, &allocator);
+
+    analyse(&code_gen, import_entry.root);
+    char* generated = generate(&code_gen, import_entry.root);
+
+    printf("%s\n", generated);
 
     arena_reset(&arena);
     arena_free(&arena);

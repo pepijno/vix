@@ -16,6 +16,7 @@
           clang-tools
           gdb
           valgrind
+          nasm
         ];
       in
       rec {

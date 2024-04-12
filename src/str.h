@@ -99,6 +99,14 @@ static char* str_append_char(char* str, char const c) {
     return new_str;
 }
 
+static char* str_cat(char* str1, char const* const str2) {
+    char* new_str = str_ensure_capacity(str1, str_length(str2));
+    size_t const length = str_length(new_str) == 0 ? 0 : str_length(new_str) - 1;
+    memcpy(new_str + length, str2, str_length(str2));
+    str_set_length(new_str, length + str_length(str2));
+    return new_str;
+}
+
 static bool str_equal(char const* const str1, char const* const str2) {
     if (str_length(str1) != str_length(str2)) {
         return false;

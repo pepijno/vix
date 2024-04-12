@@ -12,5 +12,7 @@ false = {
 person = height length > {
     name = "John";
     age = name;
-    height = 5;
+    l = 5;
 };
+
+main = print(5);

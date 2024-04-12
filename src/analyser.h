@@ -15,8 +15,15 @@ struct code_gen_t {
     size_t error_line;
     size_t error_column;
     enum error_color_t error_color;
+    struct allocator_t* allocator;
 };
 
 void analyse(
-    struct allocator_t* allocator, struct ast_node_t const* const root
+    struct code_gen_t code_gen[static const 1],
+    struct ast_node_t const root[static const 1]
+);
+
+char* generate(
+    struct code_gen_t code_gen[static const 1],
+    struct ast_node_t const root[static const 1]
 );

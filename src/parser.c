@@ -450,7 +450,7 @@ static struct ast_node_t* ast_parse_root(
 }
 
 struct ast_node_t* ast_parse(
-    struct allocator_t* allocator, char const* const source,
+    struct allocator_t allocator[static const 1], char const* const source,
     token_ptr_array_t tokens[static const 1],
     struct import_table_entry_t owner[static const 1],
     enum error_color_t const error_color
@@ -468,28 +468,28 @@ struct ast_node_t* ast_parse(
 }
 
 static void visit_field(
-    struct ast_node_t** node, void (*visit)(struct ast_node_t**, void* context),
+    struct ast_node_t* node, void (*visit)(struct ast_node_t*, void* context),
     void* context
 ) {
-    if (*node) {
+    if (node) {
         visit(node, context);
     }
 }
 
 static void visit_node_list(
-    struct ast_node_t** list, void (*visit)(struct ast_node_t**, void* context),
+    struct ast_node_t** list, void (*visit)(struct ast_node_t*, void* context),
     void* context
 ) {
     if (list) {
         for (size_t i = 0; i < array_header(list)->length; ++i) {
-            visit(&list[i], context);
+            visit(list[i], context);
         }
     }
 }
 
 void ast_visit_node_children(
-    struct ast_node_t* node, void (*visit)(struct ast_node_t**, void* context),
-    void* context
+    struct ast_node_t node[static const 1],
+    void (*visit)(struct ast_node_t*, void* context), void* context
 ) {
     switch (node->type) {
     case NODE_TYPE_ROOT:
@@ -500,23 +500,23 @@ void ast_visit_node_children(
         visit_node_list(node->data.object.property_list, visit, context);
         break;
     case NODE_TYPE_PROPERTY:
-        visit_field(&node->data.property.identifier, visit, context);
-        visit_field(&node->data.property.object_result, visit, context);
+        visit_field(node->data.property.identifier, visit, context);
+        visit_field(node->data.property.object_result, visit, context);
         break;
     case NODE_TYPE_FREE_OBJECT_COPY:
-        visit_field(&node->data.free_object_copy.object, visit, context);
+        visit_field(node->data.free_object_copy.object, visit, context);
         visit_node_list(
             node->data.free_object_copy.property_list, visit, context
         );
         break;
     case NODE_TYPE_OBJECT_PROPERTY_ACCESS:
-        visit_field(&node->data.object_property_access.object, visit, context);
+        visit_field(node->data.object_property_access.object, visit, context);
         visit_field(
-            &node->data.object_property_access.property, visit, context
+            node->data.object_property_access.property, visit, context
         );
         break;
     case NODE_TYPE_DECORATOR:
-        visit_field(&node->data.decorator.object, visit, context);
+        visit_field(node->data.decorator.object, visit, context);
         break;
     case NODE_TYPE_IDENTIFIER:
         break;

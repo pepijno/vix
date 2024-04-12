@@ -95,11 +95,11 @@ struct import_table_entry_t {
 };
 
 void ast_visit_node_children(
-    struct ast_node_t* node, void (*visit)(struct ast_node_t**, void* context),
-    void* context
+    struct ast_node_t node[static const 1],
+    void (*visit)(struct ast_node_t*, void* context), void* context
 );
 struct ast_node_t* ast_parse(
-    struct allocator_t* allocator, char const* const source,
+    struct allocator_t allocator[static const 1], char const* const source,
     token_ptr_array_t tokens[static const 1],
     struct import_table_entry_t owner[static const 1],
     enum error_color_t const error_color

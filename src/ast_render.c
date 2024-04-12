@@ -35,8 +35,7 @@ static char* node_type_string(enum node_type_t const type) {
     vix_unreachable();
 }
 
-static void ast_print_visit(struct ast_node_t** node_ptr, void* context) {
-    struct ast_node_t* node                   = *node_ptr;
+static void ast_print_visit(struct ast_node_t* node, void* context) {
     struct ast_print_t const* const ast_print = (struct ast_print_t*) context;
 
     for (size_t i = 0; i < ast_print->indent; ++i) {
