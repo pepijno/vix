@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "string.h"
 
 enum token_type_t {
     TOKEN_IDENTIFIER,
@@ -22,11 +23,11 @@ enum token_type_t {
 };
 
 struct token_identifier_t {
-    char* identifier;
+    struct str_t identifier;
 };
 
 struct token_string_t {
-    char* string;
+    struct str_t string;
 };
 
 struct token_char_t {
@@ -34,7 +35,7 @@ struct token_char_t {
 };
 
 struct token_integer_t {
-    char* integer;
+    struct str_t integer;
 };
 
 struct token_t {
@@ -56,15 +57,15 @@ struct tokenized_t {
     token_ptr_array_t* tokens;
     size_t* line_offsets;
 
-    char* error;
+    struct str_t error;
     size_t error_line;
     size_t error_column;
 };
 
 void tokenize(
-    struct allocator_t allocator[static const 1], char const* const source,
+    struct allocator_t allocator[static const 1], struct str_t const source,
     token_ptr_array_t tokens[static const 1],
     struct tokenized_t out[static const 1]
 );
 char const* token_name(enum token_type_t const type);
-void print_tokens(char const* const source, token_ptr_array_t tokens);
+void print_tokens(struct str_t source, token_ptr_array_t tokens);

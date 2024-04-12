@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "string.h"
 
 enum error_color_t {
     ERROR_COLOR_AUTO,
@@ -11,9 +12,9 @@ enum error_color_t {
 struct error_message_t {
     size_t const line_start;
     size_t const column_start;
-    char const* const message;
-    char const* const path;
-    char* line_buffer;
+    struct str_t const message;
+    struct str_t const path;
+    struct str_t line_buffer;
     struct error_message_t** notes;
 };
 
@@ -28,13 +29,13 @@ void error_message_add_note(
 );
 
 struct error_message_t error_message_create_with_offset(
-    struct allocator_t allocator[static const 1], char const* const path,
+    struct allocator_t allocator[static const 1], struct str_t const path,
     size_t const line, size_t const column, size_t const offset,
-    char const* const source, char const* const message
+    struct str_t const source, struct str_t const message
 );
 
 struct error_message_t error_message_create_with_line(
-    struct allocator_t allocator[static const 1], char const* const path,
-    size_t const line, size_t const column, char const* const source,
-    size_t const* const line_offsets, char const* const message
+    struct allocator_t allocator[static const 1], struct str_t const path,
+    size_t const line, size_t const column, struct str_t const source,
+    size_t const* const line_offsets, struct str_t const message
 );

@@ -2,14 +2,13 @@
 
 #include "array.h"
 #include "lexer.h"
-#include "str.h"
 #include "util.h"
 
 #include <assert.h>
 #include <string.h>
 
 struct parse_context_t {
-    char const* const source;
+    struct str_t source;
     struct ast_node_t* root;
     token_ptr_array_t* tokens;
     enum error_color_t const error_color;
@@ -19,7 +18,7 @@ struct parse_context_t {
 
 static void ast_error(
     struct parse_context_t const parse_context[static const 1],
-    struct token_t const token[static const 1], char const* const message
+    struct token_t const token[static const 1], struct str_t message
 ) {
     struct error_message_t const error = error_message_create_with_line(
         parse_context->allocator, parse_context->owner->path, token->start_line,
@@ -31,11 +30,11 @@ static void ast_error(
     exit(EXIT_FAILURE);
 }
 
-static char* token_buffer(struct token_t const token[static const 1]) {
+static struct str_t token_buffer(struct token_t const token[static const 1]) {
     assert(
         token->type == TOKEN_STRING_LITERAL || token->type == TOKEN_IDENTIFIER
     );
-    return str_copy(token->data.string_literal.string);
+    return token->data.string_literal.string;
 }
 
 static void ast_expect_token(
@@ -46,13 +45,12 @@ static void ast_expect_token(
         return;
     }
 
-    ast_error(
-        parse_context, token,
-        str_printf(
-            parse_context->allocator, "expected token '%s', found '%s'",
-            token_name(type), token_name(token->type)
-        )
+    struct str_buffer_t buffer = str_buffer_new(parse_context->allocator, 0);
+    str_buffer_printf(
+        &buffer, str_new("expected token '%s', found '%s'"),
+        token_name(type), token_name(token->type)
     );
+    ast_error(parse_context, token, str_buffer_str(&buffer));
 }
 
 static struct token_t* ast_eat_token(
@@ -128,7 +126,7 @@ static struct ast_node_t* ast_parse_identifier(
         struct ast_node_t* const node =
             ast_node_create(parse_context, NODE_TYPE_IDENTIFIER, token);
         node->data.identifier.content = token_buffer(token);
-        assert(str_length(node->data.identifier.content) != 0);
+        assert(node->data.identifier.content.length != 0);
         return node;
     } else {
         return nullptr;
@@ -450,7 +448,7 @@ static struct ast_node_t* ast_parse_root(
 }
 
 struct ast_node_t* ast_parse(
-    struct allocator_t allocator[static const 1], char const* const source,
+    struct allocator_t allocator[static const 1], struct str_t source,
     token_ptr_array_t tokens[static const 1],
     struct import_table_entry_t owner[static const 1],
     enum error_color_t const error_color

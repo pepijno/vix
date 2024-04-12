@@ -21,7 +21,7 @@ enum node_type_t {
 struct ast_node_t;
 
 struct ast_string_literal_t {
-    char* content;
+    struct str_t content;
 };
 
 struct ast_char_literal_t {
@@ -29,11 +29,11 @@ struct ast_char_literal_t {
 };
 
 struct ast_integer_t {
-    char* content;
+    struct str_t content;
 };
 
 struct ast_identifier_t {
-    char* content;
+    struct str_t content;
 };
 
 typedef struct ast_node_t** ast_node_ptr_array_t;
@@ -89,8 +89,8 @@ struct ast_node_t {
 
 struct import_table_entry_t {
     struct ast_node_t* root;
-    char const* const path;
-    char const* const source_code;
+    struct str_t path;
+    struct str_t source_code;
     size_t* line_offsets;
 };
 
@@ -99,7 +99,7 @@ void ast_visit_node_children(
     void (*visit)(struct ast_node_t*, void* context), void* context
 );
 struct ast_node_t* ast_parse(
-    struct allocator_t allocator[static const 1], char const* const source,
+    struct allocator_t allocator[static const 1], struct str_t source,
     token_ptr_array_t tokens[static const 1],
     struct import_table_entry_t owner[static const 1],
     enum error_color_t const error_color

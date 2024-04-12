@@ -8,7 +8,7 @@
 
 static struct error_message_t* add_node_error(
     struct code_gen_t code_gen[static const 1],
-    struct ast_node_t const node[static const 1], char const* const message
+    struct ast_node_t const node[static const 1], struct str_t message
 ) {
     struct error_message_t error_message = error_message_create_with_line(
         code_gen->allocator, node->owner->path, node->line, node->column,
@@ -28,7 +28,7 @@ static struct error_message_t* add_node_error(
 static void add_error_note(
     struct code_gen_t code_gen[static const 1],
     struct error_message_t parent_message[static const 1],
-    struct ast_node_t const node[static const 1], char const* const message
+    struct ast_node_t const node[static const 1], struct str_t message
 ) {
     struct error_message_t error_message = error_message_create_with_line(
         code_gen->allocator, node->owner->path, node->line, node->column,
@@ -44,7 +44,7 @@ static void add_error_note(
 }
 
 static struct ast_node_t const* find_identifier(
-    struct scope_t const scope[static const 1], char const* const identifier
+    struct scope_t const scope[static const 1], struct str_t identifier
 ) {
     for (size_t i = 0; i < array_length_unsigned(scope->properties); ++i) {
         if (str_equal(
@@ -73,19 +73,20 @@ static void analyse_identifier(
     struct scope_t scope[static const 1],
     struct ast_node_t const identifier[static const 1]
 ) {
-    char const* const identifier_content = identifier->data.identifier.content;
+    struct str_t identifier_content = identifier->data.identifier.content;
     struct ast_node_t const* existing_identifier =
         find_identifier(scope, identifier_content);
     if (existing_identifier) {
-        struct error_message_t* error_message = add_node_error(
-            code_gen, identifier,
-            str_printf(
-                code_gen->allocator, "redefinition of '%s'", identifier_content
-            )
+        struct str_buffer_t buffer = str_buffer_new(code_gen->allocator, 0);
+        str_buffer_printf(
+            &buffer, str_new("redefinition of '%s'"), identifier_content
         );
+        struct error_message_t* error_message =
+            add_node_error(code_gen, identifier, str_buffer_str(&buffer));
+        str_buffer_printf(&buffer, str_new("previous definition is here"));
         add_error_note(
             code_gen, error_message, existing_identifier,
-            str_printf(code_gen->allocator, "previous definition is here")
+            str_buffer_str(&buffer)
         );
     } else {
         array_push(scope->properties, identifier);
@@ -140,8 +141,7 @@ static void analyse_property(
     struct ast_node_t const property[static const 1]
 ) {
     assert(
-        str_length(property->data.property.identifier->data.identifier.content
-        ) != 0
+        property->data.property.identifier->data.identifier.content.length != 0
     );
     analyse_identifier(code_gen, scope, property->data.property.identifier);
     analyse_node(code_gen, scope, property->data.property.object_result);
@@ -194,42 +194,65 @@ void analyse(
     report_errors_and_maybe_exit(code_gen);
 }
 
-static char* write_program_start(char* const str) {
-    char* s = str_printf(
-        str_allocator(str),
-        "global  _start\n"
-        "_start:\n"
-        " \n"
+static void write_program_start(struct str_buffer_t buffer[static const 1]) {
+    str_buffer_reset(buffer);
+    str_buffer_append_printf(
+        buffer, str_new("global  _start\n"
+                        "_start:\n"
+                        "\n")
     );
-    return str_cat(str, s);
 }
 
-static char* write_program_end(char* const str) {
-    char* s = str_printf(
-        str_allocator(str),
-        "_end:\n"
-        "    mov     ebx, 0      ; return 0 status on exit - 'No Errors'\n"
-        "    mov     eax, 1      ; invoke SYS_EXIT (kernel opcode 1)\n"
-        "    int     80h\n"
+static void write_program_end(struct str_buffer_t buffer[static const 1]) {
+    str_buffer_append_printf(
+        buffer,
+        str_new(
+            "_end:\n"
+            "    mov     ebx, 0      ; return 0 status on exit - 'No Errors'\n"
+            "    mov     eax, 1      ; invoke SYS_EXIT (kernel opcode 1)\n"
+            "    int     80h\n"
+        )
     );
-    return str_cat(str, s);
 }
 
-static char* generate_node(
+static void generate_node(
     struct code_gen_t code_gen[static const 1],
-    struct ast_node_t const node[static const 1], char* const str
+    struct ast_node_t const node[static const 1],
+    struct str_buffer_t prefix[static const 1],
+    struct str_buffer_t buffer[static const 1]
 ) {
-    char* s = str;
     switch (node->type) {
     case NODE_TYPE_ROOT:
-        for (size_t i = 0; i < array_length_unsigned(node->data.root.list); ++i) {
-            s = generate_node(code_gen, node->data.root.list[i], s);
+        for (size_t i = 0; i < array_length_unsigned(node->data.root.list);
+             ++i) {
+            generate_node(code_gen, node->data.root.list[i], prefix, buffer);
         }
         break;
-    case NODE_TYPE_PROPERTY:
-        s = str_cat(s, str_printf(str_allocator(s), "_%s:\n", node->data.property.identifier->data.identifier.content));
-        break;
+    case NODE_TYPE_PROPERTY: {
+        struct str_buffer_t new_prefix = str_buffer_new(prefix->allocator, 0);
+        str_buffer_append_printf(
+            &new_prefix, str_new(str_fmt "_" str_fmt),
+            str_args(*prefix),
+            str_args(node->data.property.identifier->data.identifier.content)
+        );
+        printf("a "str_fmt"\n", str_args(*prefix));
+        printf("b "str_fmt"\n", str_args(node->data.property.identifier->data.identifier.content));
+        printf("c "str_fmt"\n", str_args(new_prefix));
+        str_buffer_append_printf(
+            buffer, str_new(str_fmt ":\n"), str_args(new_prefix)
+        );
+        generate_node(
+            code_gen, node->data.property.object_result, &new_prefix, buffer
+        );
+    } break;
     case NODE_TYPE_OBJECT:
+        // TODE free properties
+        for (size_t i = 0;
+             i < array_length_unsigned(node->data.object.property_list); ++i) {
+            generate_node(
+                code_gen, node->data.object.property_list[i], prefix, buffer
+            );
+        }
     case NODE_TYPE_STRING_LITERAL:
     case NODE_TYPE_CHAR_LITERAL:
     case NODE_TYPE_INTEGER:
@@ -239,20 +262,22 @@ static char* generate_node(
     case NODE_TYPE_OBJECT_PROPERTY_ACCESS:
         break;
     }
-    return s;
 }
 
-char* generate(
+struct str_t generate(
     struct code_gen_t code_gen[static const 1],
     struct ast_node_t const root[static const 1]
 ) {
-    char* str = str_new_empty(code_gen->allocator);
+    struct str_buffer_t buffer = str_buffer_new(code_gen->allocator, 0);
 
-    str = write_program_start(str);
+    write_program_start(&buffer);
 
-    str = generate_node(code_gen, root, str);
+    struct str_buffer_t prefix = str_buffer_new(code_gen->allocator, 5);
+    str_buffer_append(&prefix, str_new("_root"));
 
-    str = write_program_end(str);
+    generate_node(code_gen, root, &prefix, &buffer);
 
-    return str;
+    write_program_end(&buffer);
+
+    return str_buffer_str(&buffer);
 }

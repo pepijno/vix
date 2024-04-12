@@ -1,7 +1,7 @@
 #include "lexer.h"
 
 #include "array.h"
-#include "str.h"
+#include "string.h"
 #include "util.h"
 
 #include <assert.h>
@@ -96,7 +96,7 @@ enum tokenize_state_t {
 };
 
 struct tokenize_t {
-    char const* const source;
+    struct str_t source;
     struct tokenized_t* const out;
     token_ptr_array_t* tokens;
     struct allocator_t* allocator;
@@ -109,17 +109,16 @@ struct tokenize_t {
 };
 
 static void set_token_type(
-    struct allocator_t allocator[static const 1],
     struct token_t token[static const 1], enum token_type_t const type
 ) {
     token->type = type;
 
     if (type == TOKEN_STRING_LITERAL) {
-        token->data.string_literal.string = str_new_empty(allocator);
+        token->data.string_literal.string = str_new_empty();
     } else if (type == TOKEN_IDENTIFIER) {
-        token->data.identifier.identifier = str_new_empty(allocator);
+        token->data.identifier.identifier = str_new_empty();
     } else if (type == TOKEN_INT) {
-        token->data.integer.integer = str_new_empty(allocator);
+        token->data.integer.integer = str_new_empty();
     }
 }
 
@@ -133,7 +132,7 @@ static void begin_token(
     token->start_line     = t->line;
     token->start_column   = t->column;
     token->start_position = t->position,
-    set_token_type(t->allocator, token, type);
+    set_token_type(token, type);
     array_push(*t->tokens, token);
 
     t->current_token = token;
@@ -149,7 +148,8 @@ static void end_token(struct tokenize_t t[static const 1]) {
 }
 
 static void tokenize_error(
-    struct tokenize_t t[static const 1], char const* const message
+    struct tokenize_t t[static const 1],
+    struct str_t const str
 ) {
     t->state = TOKENIZE_STATE_ERROR;
 
@@ -161,17 +161,18 @@ static void tokenize_error(
         t->out->error_column = t->column;
     }
 
-    t->out->error = str_copy(message);
+    t->out->error = str;
 }
 
 static void handle_string_escape(
-    struct tokenize_t t[static const 1], char const c
+    struct tokenize_t t[static const 1],
+    struct str_buffer_t str_buffer[static const 1], char const c
 ) {
     if (t->current_token->type == TOKEN_CHAR_LITERAL) {
         t->current_token->data.char_literal.c = c;
         t->state                              = TOKENIZE_STATE_CHAR_END;
     } else if (t->current_token->type == TOKEN_STRING_LITERAL || t->current_token->type == TOKEN_IDENTIFIER) {
-        t->current_token->data.string_literal.string = str_append_char(t->current_token->data.string_literal.string, c);
+        str_buffer_append_char(str_buffer, c);
         t->state = TOKENIZE_STATE_STRING;
     } else {
         vix_unreachable();
@@ -179,7 +180,7 @@ static void handle_string_escape(
 }
 
 void tokenize(
-    struct allocator_t allocator[static const 1], char const* const source,
+    struct allocator_t allocator[static const 1], struct str_t const source,
     token_ptr_array_t tokens[static const 1], struct tokenized_t out[static 1]
 ) {
     struct tokenize_t t = {
@@ -192,9 +193,11 @@ void tokenize(
 
     out->line_offsets = array(size_t, t.allocator);
 
+    struct str_buffer_t buffer = str_buffer_new(allocator, 0);
+
     array_push(out->line_offsets, 0);
-    for (t.position = 0; t.position < str_length(t.source); t.position++) {
-        char const c = t.source[t.position];
+    for (t.position = 0; t.position < t.source.length; t.position++) {
+        char const c = str_at(t.source, t.position);
         switch (t.state) {
         case TOKENIZE_STATE_ERROR:
             break;
@@ -248,23 +251,25 @@ void tokenize(
                 break;
             case ALPHA:
                 begin_token(&t, TOKEN_IDENTIFIER);
-                t.current_token->data.identifier.identifier = str_append_char(t.current_token->data.identifier.identifier, c);
+                str_buffer_append_char(&buffer, c);
                 t.state = TOKENIZE_STATE_IDENTIFIER;
                 break;
             case DIGIT:
                 begin_token(&t, TOKEN_INT);
-                t.current_token->data.integer.integer = str_append_char(t.current_token->data.integer.integer, c);
+                str_buffer_append_char(&buffer, c);
                 t.state = TOKENIZE_STATE_SAW_DIGIT;
                 break;
             default:
-                tokenize_error(&t, str_printf(allocator, "invalid character: '%c'", c));
+                str_buffer_printf(&buffer, str_new("invalid character: '%c'"), c);
+                tokenize_error(&t, str_buffer_str(&buffer));
                 break;
             }
             break;
         case TOKENIZE_STATE_CHAR:
             switch (c) {
             case '\'':
-                tokenize_error(&t, str_new(allocator, "expected character"));
+                str_buffer_printf(&buffer, str_new("expected character"));
+                tokenize_error(&t, str_buffer_str(&buffer));
                 break;
             case '\\':
                 t.state = TOKENIZE_STATE_STRING_ESCAPE;
@@ -282,54 +287,62 @@ void tokenize(
                 t.state = TOKENIZE_STATE_START;
                 break;
             default:
-                tokenize_error(&t, str_printf(allocator, "invalid character: '%c'", c));
+                str_buffer_printf(&buffer, str_new("invalid character: '%c'"), c);
+                tokenize_error(&t, str_buffer_str(&buffer));
                 break;
             }
             break;
         case TOKENIZE_STATE_STRING:
             switch (c) {
             case '"':
+                t.current_token->data.string_literal.string =
+                    str_buffer_str(&buffer);
+                str_buffer_reset(&buffer);
                 end_token(&t);
                 t.state = TOKENIZE_STATE_START;
                 break;
             default:
-                t.current_token->data.string_literal.string = str_append_char(t.current_token->data.string_literal.string, c);
+                str_buffer_append_char(&buffer, c);
                 break;
             }
             break;
         case TOKENIZE_STATE_STRING_ESCAPE:
             switch (c) {
             case 'n':
-                handle_string_escape(&t, '\n');
+                handle_string_escape(&t, &buffer, '\n');
                 break;
             case 'r':
-                handle_string_escape(&t, '\r');
+                handle_string_escape(&t, &buffer, '\r');
                 break;
             case '\\':
-                handle_string_escape(&t, '\\');
+                handle_string_escape(&t, &buffer, '\\');
                 break;
             case 't':
-                handle_string_escape(&t, '\t');
+                handle_string_escape(&t, &buffer, '\t');
                 break;
             case '\'':
-                handle_string_escape(&t, '\'');
+                handle_string_escape(&t, &buffer, '\'');
                 break;
             case '"':
-                handle_string_escape(&t, '"');
+                handle_string_escape(&t, &buffer, '"');
                 break;
             default:
-                tokenize_error(&t, str_printf(allocator, "invalid character: '%c'", c));
+                str_buffer_printf(&buffer, str_new("invalid character: '%c'"), c);
+                tokenize_error(&t, str_buffer_str(&buffer));
                 break;
             }
             break;
         case TOKENIZE_STATE_IDENTIFIER:
             switch (c) {
             case SYMBOL_CHAR:
-                t.current_token->data.string_literal.string = str_append_char(t.current_token->data.string_literal.string, c);
+                str_buffer_append_char(&buffer, c);
                 break;
             default:
                 t.position -= 1;
                 t.column -= 1;
+                t.current_token->data.identifier.identifier =
+                    str_buffer_str(&buffer);
+                str_buffer_reset(&buffer);
                 end_token(&t);
                 t.state = TOKENIZE_STATE_START;
                 break;
@@ -338,7 +351,7 @@ void tokenize(
         case TOKENIZE_STATE_SAW_DOT:
             switch (c) {
             case '.':
-                set_token_type(t.allocator, t.current_token, TOKEN_DOT_DOT);
+                set_token_type(t.current_token, TOKEN_DOT_DOT);
                 t.state = TOKENIZE_STATE_SAW_DOT_DOT;
                 break;
             default:
@@ -352,23 +365,26 @@ void tokenize(
         case TOKENIZE_STATE_SAW_DOT_DOT:
             switch (c) {
             case '.':
-                set_token_type(t.allocator, t.current_token, TOKEN_DOT_DOT_DOT);
+                set_token_type(t.current_token, TOKEN_DOT_DOT_DOT);
                 end_token(&t);
                 t.state = TOKENIZE_STATE_START;
                 break;
             default:
-                tokenize_error(&t, str_printf(allocator, "invalid character: '%c'", c));
+                str_buffer_printf(&buffer, str_new("invalid character: '%c'"), c);
+                tokenize_error(&t, str_buffer_str(&buffer));
                 break;
             }
             break;
         case TOKENIZE_STATE_SAW_DIGIT:
             switch (c) {
             case DIGIT:
-                t.current_token->data.integer.integer = str_append_char(t.current_token->data.integer.integer, c);
+                str_buffer_append_char(&buffer, c);
                 break;
             default:
                 t.position -= 1;
                 t.column -= 1;
+                t.current_token->data.integer.integer = str_buffer_str(&buffer);
+                str_buffer_reset(&buffer);
                 end_token(&t);
                 t.state = TOKENIZE_STATE_START;
                 break;
@@ -390,19 +406,23 @@ void tokenize(
         break;
     case TOKENIZE_STATE_CHAR:
     case TOKENIZE_STATE_CHAR_END:
-        tokenize_error(&t, str_new(allocator, "unterminated character literal"));
+        str_buffer_printf(&buffer, str_new("unterminated character literal"));
+        tokenize_error(&t, str_buffer_str(&buffer));
         break;
     case TOKENIZE_STATE_STRING_ESCAPE:
         if (t.current_token->type == TOKEN_STRING_LITERAL) {
-            tokenize_error(&t, str_new(allocator, "unterminated string"));
+            str_buffer_printf(&buffer, str_new("unterminated string"));
+            tokenize_error(&t, str_buffer_str(&buffer));
         } else if (t.current_token->type == TOKEN_CHAR_LITERAL) {
-            tokenize_error(&t, str_new(allocator, "unterminated character literal"));
+            str_buffer_printf(&buffer, str_new("unterminated character literal"));
+            tokenize_error(&t, str_buffer_str(&buffer));
         } else {
             vix_unreachable();
         }
         break;
     case TOKENIZE_STATE_STRING:
-        tokenize_error(&t, str_new(allocator, "unterminated string"));
+        str_buffer_printf(&buffer, str_new("unterminated string"));
+        tokenize_error(&t, str_buffer_str(&buffer));
         break;
     case TOKENIZE_STATE_IDENTIFIER:
     case TOKENIZE_STATE_SAW_DIGIT:
@@ -465,13 +485,13 @@ char const* token_name(enum token_type_t const type) {
     return "(invalid token)";
 }
 
-void print_tokens(char const* const source, struct token_t** tokens) {
+void print_tokens(struct str_t source, struct token_t** tokens) {
     for (size_t i = 0; i < array_header(tokens)->length; ++i) {
         struct token_t const* const token = tokens[i];
         printf("%s ", token_name(token->type));
         if (token->start_position != __SIZE_MAX__) {
             fwrite(
-                source + token->start_position, sizeof(char),
+                source.data + token->start_position, sizeof(char),
                 token->end_position - token->start_position, stdout
             );
         }

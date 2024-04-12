@@ -23,7 +23,7 @@ void analyse(
     struct ast_node_t const root[static const 1]
 );
 
-char* generate(
+struct str_t generate(
     struct code_gen_t code_gen[static const 1],
     struct ast_node_t const root[static const 1]
 );

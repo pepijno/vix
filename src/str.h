@@ -32,7 +32,7 @@ static inline void str_set_length(char* const str, size_t const new_length) {
     ((struct str_header_t*)str - 1)->length = new_length;
 }
 
-static char* str_new_length(struct allocator_t* allocator, char const* const data, size_t const length) {
+static char* sstr_new_length(struct allocator_t* allocator, char const* const data, size_t const length) {
     size_t const header_size = sizeof(struct str_header_t);
     void* const ptr = allocator->allocate(header_size + length + 1, allocator->context);
     if (!ptr) {
@@ -52,17 +52,17 @@ static char* str_new_length(struct allocator_t* allocator, char const* const dat
     return str;
 }
 
-static char* str_new_empty(struct allocator_t* allocator) {
-    return str_new_length(allocator, "", 0);
+static char* sstr_new_empty(struct allocator_t* allocator) {
+    return sstr_new_length(allocator, "", 0);
 }
 
-static char* str_new(struct allocator_t* allocator, char const* const data) {
+static char* sstr_new(struct allocator_t* allocator, char const* const data) {
     size_t const length = (data) ? strlen(data) : 0;
-    return str_new_length(allocator, data, length);
+    return sstr_new_length(allocator, data, length);
 }
 
-static char* str_copy(char const* const str) {
-    return str_new_length(str_allocator(str), str, str_length(str));
+static char* sstr_copy(char const* const str) {
+    return sstr_new_length(str_allocator(str), str, str_length(str));
 }
 
 static void str_free(char const* const str) {
@@ -101,13 +101,13 @@ static char* str_append_char(char* str, char const c) {
 
 static char* str_cat(char* str1, char const* const str2) {
     char* new_str = str_ensure_capacity(str1, str_length(str2));
-    size_t const length = str_length(new_str) == 0 ? 0 : str_length(new_str) - 1;
+    size_t const length = str_length(new_str) == 0 ? 0 : str_length(new_str);
     memcpy(new_str + length, str2, str_length(str2));
     str_set_length(new_str, length + str_length(str2));
     return new_str;
 }
 
-static bool str_equal(char const* const str1, char const* const str2) {
+static bool sstr_equal(char const* const str1, char const* const str2) {
     if (str_length(str1) != str_length(str2)) {
         return false;
     }
@@ -131,7 +131,7 @@ static char* str_vprintf(struct allocator_t allocator[static const 1], char cons
 
     size_t const required_length = length1 + 1;
 
-    char* str = str_new_length(allocator, nullptr, required_length);
+    char* str = sstr_new_length(allocator, nullptr, required_length);
 
     int length2 = vsnprintf(str, required_length, format, ap2);
     assert(length1 == length2);

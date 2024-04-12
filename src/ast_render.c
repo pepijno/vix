@@ -1,7 +1,6 @@
 #include "ast_render.h"
 
 #include "parser.h"
-#include "str.h"
 #include "util.h"
 
 struct ast_print_t {
@@ -44,13 +43,13 @@ static void ast_print_visit(struct ast_node_t* node, void* context) {
 
     fprintf(ast_print->f, "%s ", node_type_string(node->type));
     if (node->type == NODE_TYPE_IDENTIFIER) {
-        fprintf(ast_print->f, "\"%s\"", node->data.identifier.content);
+        fprintf(ast_print->f, "\""str_fmt"\"", str_args(node->data.identifier.content));
     } else if (node->type == NODE_TYPE_STRING_LITERAL) {
-        fprintf(ast_print->f, "\"%s\"", node->data.string_literal.content);
+        fprintf(ast_print->f, "\""str_fmt"\"", str_args(node->data.string_literal.content));
     } else if (node->type == NODE_TYPE_CHAR_LITERAL) {
         fprintf(ast_print->f, "'%c'", node->data.char_literal.c);
     } else if (node->type == NODE_TYPE_INTEGER) {
-        fprintf(ast_print->f, "\"%s\"", node->data.integer.content);
+        fprintf(ast_print->f, "\""str_fmt"\"", str_args(node->data.integer.content));
     }
     fprintf(ast_print->f, "\n");
 

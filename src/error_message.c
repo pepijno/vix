@@ -1,7 +1,6 @@
 #include "error_message.h"
 
 #include "array.h"
-#include "str.h"
 #include "util.h"
 
 #include <stdbool.h>
@@ -51,36 +50,36 @@ static void print_error_message_type(
     struct error_message_t const error_message[static const 1],
     enum error_color_t const color, enum error_type_t const error_type
 ) {
-    char const* const path = error_message->path;
-    size_t const line      = error_message->line_start + 1;
-    size_t const col       = error_message->column_start + 1;
-    char const* const text = error_message->message;
+    struct str_t const path = error_message->path;
+    size_t const line       = error_message->line_start + 1;
+    size_t const col        = error_message->column_start + 1;
+    struct str_t const text = error_message->message;
 
     bool const is_tty = isatty(STDERR_FILENO) != 0;
     if (color == ERROR_COLOR_ON || (color == ERROR_COLOR_AUTO && is_tty)) {
         if (error_type == ERROR_TYPE_ERROR) {
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, "%s:%zu:%zu: ", path, line, col);
+            fprintf(stderr, str_fmt":%zu:%zu: ", str_args(path), line, col);
             set_color_posix(TERM_COLOR_RED);
             fprintf(stderr, "error: ");
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, " %s", text);
+            fprintf(stderr, " "str_fmt, str_args(text));
             set_color_posix(TERM_COLOR_RESET);
             fprintf(stderr, "\n");
         } else if (error_type == ERROR_TYPE_NOTE) {
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, "%s:%zu:%zu: ", path, line, col);
+            fprintf(stderr, str_fmt":%zu:%zu: ", str_args(path), line, col);
             set_color_posix(TERM_COLOR_CYAN);
             fprintf(stderr, "note: ");
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, " %s", text);
+            fprintf(stderr, " "str_fmt, str_args(text));
             set_color_posix(TERM_COLOR_RESET);
             fprintf(stderr, "\n");
         } else {
             vix_unreachable();
         }
 
-        fprintf(stderr, "%s\n", error_message->line_buffer);
+        fprintf(stderr, str_fmt"\n", str_args(error_message->line_buffer));
         for (size_t i = 0; i < error_message->column_start; ++i) {
             fprintf(stderr, " ");
         }
@@ -90,9 +89,9 @@ static void print_error_message_type(
         fprintf(stderr, "\n");
     } else {
         if (error_type == ERROR_TYPE_ERROR) {
-            fprintf(stderr, "%s:%zu:%zu: error: %s\n", path, line, col, text);
+            fprintf(stderr, str_fmt":%zu:%zu: error: "str_fmt"\n", str_args(path), line, col, str_args(text));
         } else if (error_type == ERROR_TYPE_NOTE) {
-            fprintf(stderr, "%s:%zu:%zu: note: %s\n", path, line, col, text);
+            fprintf(stderr, str_fmt":%zu:%zu: note: "str_fmt"\n", str_args(path), line, col, str_args(text));
         } else {
             vix_unreachable();
         }
@@ -119,9 +118,9 @@ void error_message_add_note(
 }
 
 struct error_message_t error_message_create_with_offset(
-    struct allocator_t allocator[static const 1], char const* const path,
+    struct allocator_t allocator[static const 1], struct str_t const path,
     size_t const line, size_t const column, size_t const offset,
-    char const* const source, char const* const message
+    struct str_t const source, struct str_t const message
 ) {
     struct error_message_t error_message = {
         .path         = path,
@@ -139,19 +138,19 @@ struct error_message_t error_message_create_with_offset(
 
         line_start_offset -= 1;
 
-        if (source[line_start_offset] == '\n') {
+        if (str_at(source, line_start_offset) == '\n') {
             line_start_offset += 1;
             break;
         }
     }
 
     size_t line_end_offset = offset;
-    while (source[line_start_offset] && source[line_end_offset] != '\n') {
+    while (source.length > line_start_offset && str_at(source, line_end_offset) != '\n') {
         line_end_offset += 1;
     }
 
     error_message.line_buffer = str_new_length(
-        allocator, source + line_start_offset,
+        source.data + line_start_offset,
         line_end_offset - line_start_offset
     );
 
@@ -159,9 +158,9 @@ struct error_message_t error_message_create_with_offset(
 }
 
 struct error_message_t error_message_create_with_line(
-    struct allocator_t allocator[static const 1], char const* const path,
-    size_t const line, size_t const column, char const* const source,
-    size_t const* const line_offsets, char const* const message
+    struct allocator_t allocator[static const 1], struct str_t const path,
+    size_t const line, size_t const column, struct str_t const source,
+    size_t const* const line_offsets, struct str_t const message
 ) {
     struct error_message_t error_message = {
         .path         = path,
@@ -175,14 +174,14 @@ struct error_message_t error_message_create_with_line(
     size_t const end_line          = line + 1;
     size_t const line_end_offset =
         (end_line >= array_header(line_offsets)->length)
-            ? str_length(source)
+            ? source.length
             : line_offsets[line + 1];
     size_t const length = (line_end_offset + 1 > line_start_offset)
                             ? (line_end_offset - line_start_offset - 1)
                             : 0;
 
     error_message.line_buffer =
-        str_new_length(allocator, source + line_start_offset, length);
+        str_new_length(source.data + line_start_offset, length);
 
     return error_message;
 }
