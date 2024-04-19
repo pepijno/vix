@@ -5,19 +5,19 @@
 #include "parser.h"
 #include "util.h"
 
-static struct error_message_t* add_node_error(
-    struct code_gen_t code_gen[static const 1],
-    struct ast_node_t const node[static const 1], struct str_t message
+static error_message_t* add_node_error(
+    code_gen_t code_gen[static const 1],
+    ast_node_t const node[static const 1], str_t message
 ) {
-    struct error_message_t error_message = error_message_create_with_line(
+    error_message_t error_message = error_message_create_with_line(
         code_gen->allocator, node->owner->path, node->line, node->column,
         node->owner->source_code, node->owner->line_offsets, message
     );
 
-    struct error_message_t* err = code_gen->allocator->allocate(
-        sizeof(struct error_message_t), code_gen->allocator->context
+    error_message_t* err = code_gen->allocator->allocate(
+        sizeof(error_message_t), code_gen->allocator->context
     );
-    memcpy(err, &error_message, sizeof(struct error_message_t));
+    memcpy(err, &error_message, sizeof(error_message_t));
 
     array_push(code_gen->errors, err);
 
@@ -25,25 +25,25 @@ static struct error_message_t* add_node_error(
 }
 
 static void add_error_note(
-    struct code_gen_t code_gen[static const 1],
-    struct error_message_t parent_message[static const 1],
-    struct ast_node_t const node[static const 1], struct str_t message
+    code_gen_t code_gen[static const 1],
+    error_message_t parent_message[static const 1],
+    ast_node_t const node[static const 1], str_t message
 ) {
-    struct error_message_t error_message = error_message_create_with_line(
+    error_message_t error_message = error_message_create_with_line(
         code_gen->allocator, node->owner->path, node->line, node->column,
         node->owner->source_code, node->owner->line_offsets, message
     );
 
-    struct error_message_t* err = code_gen->allocator->allocate(
-        sizeof(struct error_message_t), code_gen->allocator->context
+    error_message_t* err = code_gen->allocator->allocate(
+        sizeof(error_message_t), code_gen->allocator->context
     );
-    memcpy(err, &error_message, sizeof(struct error_message_t));
+    memcpy(err, &error_message, sizeof(error_message_t));
 
     error_message_add_note(parent_message, err);
 }
 
-static struct ast_node_t const* find_identifier(
-    struct scope_t const scope[static const 1], struct str_t identifier
+static ast_node_t const* find_identifier(
+    scope_t const scope[static const 1], str_t identifier
 ) {
     for (size_t i = 0; i < array_length_unsigned(scope->properties); ++i) {
         if (str_equal(
@@ -56,31 +56,31 @@ static struct ast_node_t const* find_identifier(
 }
 
 static void analyse_node(
-    struct code_gen_t code_gen[static const 1],
-    struct scope_t scope[static const 1],
-    struct ast_node_t const node[static const 1]
+    code_gen_t code_gen[static const 1],
+    scope_t scope[static const 1],
+    ast_node_t const node[static const 1]
 );
 
 static void analyse_property(
-    struct code_gen_t code_gen[static const 1],
-    struct scope_t scope[static const 1],
-    struct ast_node_t const property[static const 1]
+    code_gen_t code_gen[static const 1],
+    scope_t scope[static const 1],
+    ast_node_t const property[static const 1]
 );
 
 static void analyse_identifier(
-    struct code_gen_t code_gen[static const 1],
-    struct scope_t scope[static const 1],
-    struct ast_node_t const identifier[static const 1]
+    code_gen_t code_gen[static const 1],
+    scope_t scope[static const 1],
+    ast_node_t const identifier[static const 1]
 ) {
-    struct str_t identifier_content = identifier->data.identifier.content;
-    struct ast_node_t const* existing_identifier =
+    str_t identifier_content = identifier->data.identifier.content;
+    ast_node_t const* existing_identifier =
         find_identifier(scope, identifier_content);
     if (existing_identifier) {
-        struct str_buffer_t buffer = str_buffer_new(code_gen->allocator, 0);
+        str_buffer_t buffer = str_buffer_new(code_gen->allocator, 0);
         str_buffer_printf(
             &buffer, str_new("redefinition of '%s'"), identifier_content
         );
-        struct error_message_t* error_message =
+        error_message_t* error_message =
             add_node_error(code_gen, identifier, str_buffer_str(&buffer));
         str_buffer_printf(&buffer, str_new("previous definition is here"));
         add_error_note(
@@ -93,9 +93,9 @@ static void analyse_identifier(
 }
 
 static void analyse_root(
-    struct code_gen_t code_gen[static const 1],
-    struct scope_t scope[static const 1],
-    struct ast_node_t const root[static const 1]
+    code_gen_t code_gen[static const 1],
+    scope_t scope[static const 1],
+    ast_node_t const root[static const 1]
 ) {
     for (size_t i = 0; i < array_length_unsigned(root->data.root.list); ++i) {
         analyse_node(code_gen, scope, root->data.root.list[i]);
@@ -103,15 +103,15 @@ static void analyse_root(
 }
 
 static void analyse_object(
-    struct code_gen_t code_gen[static const 1],
-    struct scope_t scope[static const 1],
-    struct ast_node_t const object[static const 1]
+    code_gen_t code_gen[static const 1],
+    scope_t scope[static const 1],
+    ast_node_t const object[static const 1]
 ) {
-    struct scope_t new_scope = {
+    scope_t new_scope = {
         .parent      = scope,
         .source_node = object,
     };
-    new_scope.properties = array(struct ast_node_t*, code_gen->allocator);
+    new_scope.properties = array(ast_node_t*, code_gen->allocator);
 
     for (size_t i = 0; i < array_length_unsigned(object->data.object.free_list);
          ++i) {
@@ -121,7 +121,7 @@ static void analyse_object(
     }
     for (size_t i = 0;
          i < array_length_unsigned(object->data.object.property_list); ++i) {
-        struct ast_node_t* node = object->data.object.property_list[i];
+        ast_node_t* node = object->data.object.property_list[i];
         if (node->type == NODE_TYPE_PROPERTY) {
             analyse_property(
                 code_gen, &new_scope, object->data.object.property_list[i]
@@ -135,9 +135,9 @@ static void analyse_object(
 }
 
 static void analyse_property(
-    struct code_gen_t code_gen[static const 1],
-    struct scope_t scope[static const 1],
-    struct ast_node_t const property[static const 1]
+    code_gen_t code_gen[static const 1],
+    scope_t scope[static const 1],
+    ast_node_t const property[static const 1]
 ) {
     assert(
         property->data.property.identifier->data.identifier.content.length != 0
@@ -147,9 +147,9 @@ static void analyse_property(
 }
 
 static void analyse_node(
-    struct code_gen_t code_gen[static const 1],
-    struct scope_t scope[static const 1],
-    struct ast_node_t const node[static const 1]
+    code_gen_t code_gen[static const 1],
+    scope_t scope[static const 1],
+    ast_node_t const node[static const 1]
 ) {
     switch (node->type) {
         case NODE_TYPE_ROOT:
@@ -173,11 +173,11 @@ static void analyse_node(
 }
 
 static void report_errors_and_maybe_exit(
-    struct code_gen_t const code_gen[static const 1]
+    code_gen_t const code_gen[static const 1]
 ) {
     if (array_length_unsigned(code_gen->errors) > 0) {
         for (size_t i = 0; i < array_length_unsigned(code_gen->errors); ++i) {
-            struct error_message_t* error_message = code_gen->errors[i];
+            error_message_t* error_message = code_gen->errors[i];
             print_error_message(error_message, code_gen->error_color);
         }
         exit(1);
@@ -185,8 +185,8 @@ static void report_errors_and_maybe_exit(
 }
 
 void analyse(
-    struct code_gen_t code_gen[static const 1],
-    struct ast_node_t const root[static const 1]
+    code_gen_t code_gen[static const 1],
+    ast_node_t const root[static const 1]
 ) {
     analyse_node(code_gen, &code_gen->root_scope, root);
 
@@ -196,22 +196,22 @@ void analyse(
 size_t global_id = 0;
 
 static void write_program_start(
-    struct str_buffer_t buffer[static const 1],
-    struct ast_node_t const root[static const 1]
+    str_buffer_t buffer[static const 1],
+    ast_node_t const root[static const 1]
 ) {
     str_buffer_reset(buffer);
     str_buffer_append(buffer, str_new("#include <stdio.h>\n\n"));
 }
 
 static void write_program_end(
-    struct code_gen_t code_gen[static const 1],
-    struct str_buffer_t buffer[static const 1]
+    code_gen_t code_gen[static const 1],
+    str_buffer_t buffer[static const 1]
 ) {
 }
 
-static struct str_t property_return_type(
-    struct code_gen_t code_gen[static const 1],
-    struct ast_node_t const node[static const 1]
+static str_t property_return_type(
+    code_gen_t code_gen[static const 1],
+    ast_node_t const node[static const 1]
 ) {
     assert(node->type == NODE_TYPE_PROPERTY);
 
@@ -222,13 +222,13 @@ static struct str_t property_return_type(
     } else if (node->data.property.property_value->type == NODE_TYPE_STRING_LITERAL) {
         return str_new("char*");
     } else if (node->data.property.property_value->type == NODE_TYPE_OBJECT) {
-        struct str_buffer_t type_buffer =
+        str_buffer_t type_buffer =
             str_buffer_new(code_gen->allocator, 0);
         str_buffer_printf(
             &type_buffer, str_new("struct " str_fmt "_return"),
             str_args(node->data.property.identifier->data.identifier.content)
         );
-        struct str_t t = str_buffer_str(&type_buffer);
+        str_t t = str_buffer_str(&type_buffer);
         return t;
     } else {
         return str_new("int");
@@ -240,9 +240,9 @@ static struct str_t property_return_type(
 }
 
 static void generate_node(
-    struct code_gen_t code_gen[static const 1],
-    struct ast_node_t const node[static const 1],
-    struct str_buffer_t buffer[static const 1], struct str_t prefix, int j
+    code_gen_t code_gen[static const 1],
+    ast_node_t const node[static const 1],
+    str_buffer_t buffer[static const 1], str_t prefix, int j
 ) {
     switch (node->type) {
         case NODE_TYPE_ROOT: {
@@ -272,14 +272,14 @@ static void generate_node(
             break;
         }
         case NODE_TYPE_PROPERTY: {
-            struct str_t type = property_return_type(code_gen, node);
+            str_t type = property_return_type(code_gen, node);
             if (node->data.property.property_value->type == NODE_TYPE_OBJECT) {
                 for (size_t i = 0;
                      i <
                      array_length_unsigned(node->data.property.property_value
                                                ->data.object.property_list);
                      ++i) {
-                    struct ast_node_t const* const n =
+                    ast_node_t const* const n =
                         node->data.property.property_value->data.object
                             .property_list[i];
                     generate_node(code_gen, n, buffer, prefix, j + 1);
@@ -292,10 +292,10 @@ static void generate_node(
                      array_length_unsigned(node->data.property.property_value
                                                ->data.object.property_list);
                      ++i) {
-                    struct ast_node_t const* const n =
+                    ast_node_t const* const n =
                         node->data.property.property_value->data.object
                             .property_list[i];
-                    struct str_t child_type = property_return_type(code_gen, n);
+                    str_t child_type = property_return_type(code_gen, n);
                     str_buffer_append_printf(
                         buffer,
                         str_new(""
@@ -316,12 +316,19 @@ static void generate_node(
                         node->data.property.identifier->data.identifier.content
                     )
                 );
-                for (size_t i = 0; i < array_length_unsigned(node->data.property.property_value->data.object.free_list); ++i) {
+                for (size_t i = 0;
+                     i <
+                     array_length_unsigned(node->data.property.property_value
+                                               ->data.object.free_list);
+                     ++i) {
                     if (i != 0) {
                         str_buffer_append(buffer, str_new(", "));
                     }
-                    str_buffer_append_printf(buffer, str_new("int param%ld"), i);
-                    // struct ast_node_t* n = node->data.property.property_value->data.object.free_list[i];
+                    str_buffer_append_printf(
+                        buffer, str_new("int param%ld"), i
+                    );
+                    // ast_node_t* n =
+                    // node->data.property.property_value->data.object.free_list[i];
                 }
                 str_buffer_append(buffer, str_new(") {\n"));
                 str_buffer_append_printf(
@@ -333,7 +340,7 @@ static void generate_node(
                      array_length_unsigned(node->data.property.property_value
                                                ->data.object.property_list);
                      ++i) {
-                    struct ast_node_t const* const n =
+                    ast_node_t const* const n =
                         node->data.property.property_value->data.object
                             .property_list[i];
                     str_buffer_append_printf(
@@ -382,7 +389,7 @@ static void generate_node(
                 if (i != 0) {
                     str_buffer_append(buffer, str_new(", "));
                 }
-                struct ast_node_t* n =
+                ast_node_t* n =
                     node->data.free_object_copy_params.parameter_list[i];
                 generate_node(code_gen, n, buffer, prefix, j + 1);
             }
@@ -390,7 +397,7 @@ static void generate_node(
             break;
         }
         case NODE_TYPE_OBJECT_COPY: {
-            struct str_t identifier =
+            str_t identifier =
                 node->data.object_copy.identifier->data.identifier.content;
             if (str_equal(identifier, str_new("print"))) {
                 assert(
@@ -399,7 +406,7 @@ static void generate_node(
                     ) == 1
                 );
                 assert(node->data.object_copy.object_copy == nullptr);
-                struct ast_node_t* copies =
+                ast_node_t* copies =
                     node->data.object_copy.free_object_copies[0];
                 assert(
                     array_length_unsigned(
@@ -426,7 +433,7 @@ static void generate_node(
                                  node->data.object_copy.free_object_copies
                              );
                          ++i) {
-                        struct ast_node_t* n =
+                        ast_node_t* n =
                             node->data.object_copy.free_object_copies[i];
                         generate_node(code_gen, n, buffer, prefix, j + 1);
                     }
@@ -449,9 +456,9 @@ static void generate_node(
 }
 
 void generate(
-    struct code_gen_t code_gen[static const 1],
-    struct str_buffer_t buffer[static const 1],
-    struct ast_node_t const root[static const 1]
+    code_gen_t code_gen[static const 1],
+    str_buffer_t buffer[static const 1],
+    ast_node_t const root[static const 1]
 ) {
     write_program_start(buffer, root);
 

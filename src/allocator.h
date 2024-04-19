@@ -5,17 +5,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct allocator_t {
+typedef struct {
     void* (*allocate)(size_t const size, void* context);
     void* (*reallocate)(
         void* ptr, size_t const old_size, size_t const new_size, void* context
     );
     void (*free)(void* ptr, size_t const size, void* context);
     void* context;
-};
+} allocator_t;
 
+typedef struct region_t region_t;
 struct region_t {
-    struct region_t* next;
+    region_t* next;
     size_t count;
     size_t capacity;
     uintptr_t data[];
@@ -23,10 +24,9 @@ struct region_t {
 
 #define REGION_DEFAULT_CAPACITY (8 * 1024)
 
-static struct region_t* new_region(size_t const capacity) {
-    size_t const size_bytes =
-        sizeof(struct region_t) + sizeof(uintptr_t) * capacity;
-    struct region_t* region = malloc(size_bytes);
+static region_t* new_region(size_t const capacity) {
+    size_t const size_bytes = sizeof(region_t) + sizeof(uintptr_t) * capacity;
+    region_t* region        = malloc(size_bytes);
     assert(region);
     region->next     = NULL;
     region->count    = 0;
@@ -34,17 +34,17 @@ static struct region_t* new_region(size_t const capacity) {
     return region;
 }
 
-struct arena_t {
-    struct region_t* begin;
-    struct region_t* end;
-};
+typedef struct {
+    region_t* begin;
+    region_t* end;
+} arena_t;
 
-static void free_region(struct region_t* region) {
+static void free_region(region_t* region) {
     free(region);
 }
 
 static void* arena_allocate(size_t const size_bytes, void* const context) {
-    struct arena_t* const arena = (struct arena_t*) context;
+    arena_t* const arena = (arena_t*) context;
     size_t const size =
         (size_bytes + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
 
@@ -92,20 +92,20 @@ static void* arena_reallocate(
     return new_ptr;
 }
 
-static void arena_reset(struct arena_t* arena) {
-    for (struct region_t* region = arena->begin; region != NULL;
-         region                  = region->next) {
+static void arena_reset(arena_t* arena) {
+    for (region_t* region = arena->begin; region != NULL;
+         region           = region->next) {
         region->count = 0;
     }
 
     arena->end = arena->begin;
 }
 
-static void arena_free(struct arena_t* a) {
-    struct region_t* region = a->begin;
+static void arena_free(arena_t* a) {
+    region_t* region = a->begin;
     while (region != nullptr) {
-        struct region_t* r = region;
-        region             = region->next;
+        region_t* r = region;
+        region      = region->next;
         free_region(r);
     }
     a->begin = NULL;
@@ -119,6 +119,6 @@ static void empty_free(void* ptr, size_t const size, void* context) {
 }
 
 #define init_arena_allocator(a)                           \
-    (struct allocator_t) {                                \
+    (allocator_t) {                                       \
         arena_allocate, arena_reallocate, empty_free, (a) \
     }

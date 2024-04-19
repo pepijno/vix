@@ -2,20 +2,18 @@
 
 #include "allocator.h"
 
-struct array_header_t {
+typedef struct {
     size_t item_size;
     size_t length;
     size_t capacity;
-    struct allocator_t* allocator;
-};
+    allocator_t* allocator;
+} array_header_t;
 
-static void* array_init(struct allocator_t* allocator, size_t const item_size) {
+static void* array_init(allocator_t* allocator, size_t const item_size) {
     void* ptr         = 0;
-    size_t const size = 4 * item_size + sizeof(struct array_header_t);
-    struct array_header_t* header =
-        (struct array_header_t*) allocator->allocate(
-            size, allocator->context
-        );
+    size_t const size = 4 * item_size + sizeof(array_header_t);
+    array_header_t* header =
+        (array_header_t*) allocator->allocate(size, allocator->context);
 
     if (header) {
         header->item_size = item_size;
@@ -30,17 +28,18 @@ static void* array_init(struct allocator_t* allocator, size_t const item_size) {
 
 #define array(T, a) array_init((a), sizeof(T));
 
-#define array_header(array) ((struct array_header_t*) (array) -1)
+#define array_header(array) ((array_header_t*) (array) -1)
 
 #define array_capacity(array) ((array) ? array_header(array)->capacity : 0)
 #define array_length(array) \
-    ((array) ? (ptrdiff_t) array_header(array)->length : (ptrdiff_t)0)
-#define array_length_unsigned(array) ((array) ? array_header(array)->length : (size_t)0)
+    ((array) ? (ptrdiff_t) array_header(array)->length : (ptrdiff_t) 0)
+#define array_length_unsigned(array) \
+    ((array) ? array_header(array)->length : (size_t) 0)
 
 static void* array_grow(
     void* array, size_t const add_length, size_t const capacity
 ) {
-    struct array_header_t* header = array_header(array);
+    array_header_t* header = array_header(array);
     size_t const minimum_length   = header->length + add_length;
 
     size_t minimum_capacity = capacity;
@@ -65,8 +64,8 @@ static void* array_grow(
     size_t const old_size =
         sizeof(*header) + header->length * header->item_size;
 
-    struct array_header_t* new_header =
-        (struct array_header_t*) header->allocator->reallocate(
+    array_header_t* new_header =
+        (array_header_t*) header->allocator->reallocate(
             header, old_size, size, header->allocator->context
         );
 

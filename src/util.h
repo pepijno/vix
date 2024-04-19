@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-__attribute__((format(printf, 1, 2)))
+// __attribute__((format(printf, 1, 2)))
 [[__noreturn__]] static void vix_panic(char const* const format, ...) {
     va_list ap;
     va_start(ap, format);

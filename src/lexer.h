@@ -3,7 +3,7 @@
 #include "allocator.h"
 #include "string.h"
 
-enum token_type_t {
+typedef enum {
     TOKEN_IDENTIFIER,
     TOKEN_ASSIGN,
     TOKEN_DOT,
@@ -20,52 +20,51 @@ enum token_type_t {
     TOKEN_SEMICOLON,
     TOKEN_INT,
     TOKEN_EOF
-};
+} token_type_e;
 
-struct token_identifier_t {
-    struct str_t identifier;
-};
+typedef struct {
+    str_t identifier;
+} token_identifier_t;
 
-struct token_string_t {
-    struct str_t string;
-};
+typedef struct {
+    str_t string;
+} token_string_t;
 
-struct token_char_t {
+typedef struct {
     char c;
-};
+} token_char_t;
 
-struct token_integer_t {
-    struct str_t integer;
-};
+typedef struct {
+    str_t integer;
+} token_integer_t;
 
-struct token_t {
-    enum token_type_t type;
+typedef struct {
+    token_type_e type;
     size_t start_position;
     size_t end_position;
     size_t start_line;
     size_t start_column;
     union {
-        struct token_string_t string_literal;
-        struct token_identifier_t identifier;
-        struct token_char_t char_literal;
-        struct token_integer_t integer;
+        token_string_t string_literal;
+        token_identifier_t identifier;
+        token_char_t char_literal;
+        token_integer_t integer;
     } data;
-};
+} token_t;
 
-typedef struct token_t** token_ptr_array_t;
-struct tokenized_t {
+typedef token_t** token_ptr_array_t;
+typedef struct {
     token_ptr_array_t* tokens;
     size_t* line_offsets;
 
-    struct str_t error;
+    str_t error;
     size_t error_line;
     size_t error_column;
-};
+} tokenized_t;
 
 void tokenize(
-    struct allocator_t allocator[static const 1], struct str_t const source,
-    token_ptr_array_t tokens[static const 1],
-    struct tokenized_t out[static const 1]
+    allocator_t allocator[static const 1], str_t const source,
+    token_ptr_array_t tokens[static const 1], tokenized_t out[static const 1]
 );
-char const* token_name(enum token_type_t const type);
-void print_tokens(struct str_t source, token_ptr_array_t tokens);
+char const* token_name(token_type_e const type);
+void print_tokens(str_t source, token_ptr_array_t tokens);

@@ -82,7 +82,7 @@
     case DIGIT:     \
     case '_'
 
-enum tokenize_state_t {
+typedef enum {
     TOKENIZE_STATE_START,
     TOKENIZE_STATE_STRING,
     TOKENIZE_STATE_STRING_ESCAPE,
@@ -93,23 +93,23 @@ enum tokenize_state_t {
     TOKENIZE_STATE_SAW_DOT_DOT,
     TOKENIZE_STATE_SAW_DIGIT,
     TOKENIZE_STATE_ERROR,
-};
+} tokenize_state_e;
 
-struct tokenize_t {
-    struct str_t source;
-    struct tokenized_t* const out;
+typedef struct {
+    str_t source;
+    tokenized_t* const out;
     token_ptr_array_t* tokens;
-    struct allocator_t* allocator;
+    allocator_t* allocator;
 
     size_t position;
-    enum tokenize_state_t state;
+    tokenize_state_e state;
     size_t line;
     size_t column;
-    struct token_t* current_token;
-};
+    token_t* current_token;
+} tokenize_t;
 
 static void set_token_type(
-    struct token_t token[static const 1], enum token_type_t const type
+    token_t token[static const 1], token_type_e const type
 ) {
     token->type = type;
 
@@ -122,12 +122,10 @@ static void set_token_type(
     }
 }
 
-static void begin_token(
-    struct tokenize_t t[static const 1], enum token_type_t const type
-) {
+static void begin_token(tokenize_t t[static const 1], token_type_e const type) {
     assert(!t->current_token);
-    struct token_t* token = (struct token_t*) t->allocator->allocate(
-        sizeof(struct token_t), t->allocator->context
+    token_t* token = (token_t*) t->allocator->allocate(
+        sizeof(token_t), t->allocator->context
     );
     token->start_line     = t->line;
     token->start_column   = t->column;
@@ -137,7 +135,7 @@ static void begin_token(
     t->current_token = token;
 }
 
-static void end_token(struct tokenize_t t[static const 1]) {
+static void end_token(tokenize_t t[static const 1]) {
     assert(t->current_token);
     t->current_token->end_position = t->position + 1;
 
@@ -146,9 +144,7 @@ static void end_token(struct tokenize_t t[static const 1]) {
     t->current_token = NULL;
 }
 
-static void tokenize_error(
-    struct tokenize_t t[static const 1], struct str_t const str
-) {
+static void tokenize_error(tokenize_t t[static const 1], str_t const str) {
     t->state = TOKENIZE_STATE_ERROR;
 
     if (t->current_token) {
@@ -163,8 +159,8 @@ static void tokenize_error(
 }
 
 static void handle_string_escape(
-    struct tokenize_t t[static const 1],
-    struct str_buffer_t str_buffer[static const 1], char const c
+    tokenize_t t[static const 1], str_buffer_t str_buffer[static const 1],
+    char const c
 ) {
     if (t->current_token->type == TOKEN_CHAR_LITERAL) {
         t->current_token->data.char_literal.c = c;
@@ -178,10 +174,10 @@ static void handle_string_escape(
 }
 
 void tokenize(
-    struct allocator_t allocator[static const 1], struct str_t const source,
-    token_ptr_array_t tokens[static const 1], struct tokenized_t out[static 1]
+    allocator_t allocator[static const 1], str_t const source,
+    token_ptr_array_t tokens[static const 1], tokenized_t out[static 1]
 ) {
-    struct tokenize_t t = {
+    tokenize_t t = {
         .out       = out,
         .tokens    = tokens,
         .source    = source,
@@ -191,7 +187,7 @@ void tokenize(
 
     out->line_offsets = array(size_t, t.allocator);
 
-    struct str_buffer_t buffer = str_buffer_new(allocator, 0);
+    str_buffer_t buffer = str_buffer_new(allocator, 0);
     str_buffer_reset(&buffer);
 
     array_push(out->line_offsets, 0);
@@ -448,10 +444,10 @@ void tokenize(
 
     if (t.state != TOKENIZE_STATE_ERROR) {
         if (array_header(*t.tokens)->length > 0) {
-            struct token_t* const last_token = array_last(*t.tokens);
-            t.line                           = last_token->start_line;
-            t.column                         = last_token->start_column;
-            t.position                       = last_token->start_position;
+            token_t* const last_token = array_last(*t.tokens);
+            t.line                    = last_token->start_line;
+            t.column                  = last_token->start_column;
+            t.position                = last_token->start_position;
         } else {
             t.position = 0;
         }
@@ -461,7 +457,7 @@ void tokenize(
     }
 }
 
-char const* token_name(enum token_type_t const type) {
+char const* token_name(token_type_e const type) {
     switch (type) {
         case TOKEN_INT:
             return "Integer";
@@ -499,9 +495,9 @@ char const* token_name(enum token_type_t const type) {
     return "(invalid token)";
 }
 
-void print_tokens(struct str_t source, struct token_t** tokens) {
+void print_tokens(str_t source, token_t** tokens) {
     for (size_t i = 0; i < array_header(tokens)->length; ++i) {
-        struct token_t const* const token = tokens[i];
+        token_t const* const token = tokens[i];
         printf("%ld %s ", i, token_name(token->type));
         if (token->start_position != __SIZE_MAX__) {
             fwrite(

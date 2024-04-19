@@ -3,34 +3,35 @@
 #include "allocator.h"
 #include "parser.h"
 
+typedef struct scope_t scope_t;
 struct scope_t {
-    struct ast_node_t const* const source_node;
-    struct scope_t* parent;
-    struct ast_node_t const** properties;
+    ast_node_t const* const source_node;
+    scope_t* parent;
+    ast_node_t const** properties;
 };
 
-struct string_data_t {
-    struct str_t str;
+typedef struct {
+    str_t str;
     size_t id;
-};
+} string_data_t;
 
-struct code_gen_t {
-    struct scope_t root_scope;
-    struct error_message_t** errors;
+typedef struct {
+    scope_t root_scope;
+    error_message_t** errors;
     size_t error_line;
     size_t error_column;
-    enum error_color_t error_color;
-    struct allocator_t* allocator;
-    struct string_data_t* data_strings;
-};
+    error_color_e error_color;
+    allocator_t* allocator;
+    string_data_t* data_strings;
+} code_gen_t;
 
 void analyse(
-    struct code_gen_t code_gen[static const 1],
-    struct ast_node_t const root[static const 1]
+    code_gen_t code_gen[static const 1],
+    ast_node_t const root[static const 1]
 );
 
 void generate(
-    struct code_gen_t code_gen[static const 1],
-    struct str_buffer_t buffer[static const 1],
-    struct ast_node_t const root[static const 1]
+    code_gen_t code_gen[static const 1],
+    str_buffer_t buffer[static const 1],
+    ast_node_t const root[static const 1]
 );
