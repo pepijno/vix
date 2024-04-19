@@ -12,8 +12,8 @@ enum node_type_t {
     NODE_TYPE_OBJECT,
     NODE_TYPE_PROPERTY,
     NODE_TYPE_IDENTIFIER,
-    NODE_TYPE_FREE_OBJECT_COPY,
-    NODE_TYPE_OBJECT_PROPERTY_ACCESS,
+    NODE_TYPE_FREE_OBJECT_COPY_PARAMS,
+    NODE_TYPE_OBJECT_COPY,
     NODE_TYPE_DECORATOR,
     NODE_TYPE_ROOT
 };
@@ -36,26 +36,25 @@ struct ast_identifier_t {
     struct str_t content;
 };
 
-typedef struct ast_node_t** ast_node_ptr_array_t;
-
 struct ast_object_t {
-    ast_node_ptr_array_t free_list;
-    ast_node_ptr_array_t property_list;
+    struct ast_node_t** free_list;
+    struct ast_node_t** property_list;
+    struct ast_node_t* object_copy;
 };
 
 struct ast_property_t {
     struct ast_node_t* identifier;
-    struct ast_node_t* object_result;
+    struct ast_node_t* property_value;
 };
 
-struct ast_object_property_access_t {
-    struct ast_node_t* object;
-    struct ast_node_t* property;
+struct ast_object_copy_t {
+    struct ast_node_t* identifier;
+    struct ast_node_t** free_object_copies;
+    struct ast_node_t* object_copy;
 };
 
-struct ast_free_object_copy_t {
-    struct ast_node_t* object;
-    ast_node_ptr_array_t property_list;
+struct ast_free_object_copy_params_t {
+    struct ast_node_t** parameter_list;
 };
 
 struct ast_decorator_t {
@@ -63,13 +62,15 @@ struct ast_decorator_t {
 };
 
 struct ast_root_t {
-    ast_node_ptr_array_t list;
+    struct ast_node_t** list;
 };
 
 struct import_table_entry_t;
 
 struct ast_node_t {
+    size_t id;
     enum node_type_t const type;
+    struct ast_node_t* parent;
     size_t const line;
     size_t const column;
     struct import_table_entry_t* owner;
@@ -80,8 +81,8 @@ struct ast_node_t {
         struct ast_object_t object;
         struct ast_property_t property;
         struct ast_identifier_t identifier;
-        struct ast_object_property_access_t object_property_access;
-        struct ast_free_object_copy_t free_object_copy;
+        struct ast_object_copy_t object_copy;
+        struct ast_free_object_copy_params_t free_object_copy_params;
         struct ast_decorator_t decorator;
         struct ast_root_t root;
     } data;

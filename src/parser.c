@@ -8,6 +8,7 @@
 #include <string.h>
 
 struct parse_context_t {
+    size_t id;
     struct str_t source;
     struct ast_node_t* root;
     token_ptr_array_t* tokens;
@@ -47,8 +48,8 @@ static void ast_expect_token(
 
     struct str_buffer_t buffer = str_buffer_new(parse_context->allocator, 0);
     str_buffer_printf(
-        &buffer, str_new("expected token '%s', found '%s'"),
-        token_name(type), token_name(token->type)
+        &buffer, str_new("expected token '%s', found '%s'"), token_name(type),
+        token_name(token->type)
     );
     ast_error(parse_context, token, str_buffer_str(&buffer));
 }
@@ -64,11 +65,12 @@ static struct token_t* ast_eat_token(
 }
 
 static struct ast_node_t* ast_node_create(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     enum node_type_t const type,
     struct token_t const first_token[static const 1]
 ) {
     struct ast_node_t node = {
+        .id     = parse_context->id,
         .type   = type,
         .line   = first_token->start_line,
         .column = first_token->start_column,
@@ -79,45 +81,94 @@ static struct ast_node_t* ast_node_create(
             sizeof(struct ast_node_t), parse_context->allocator->context
         );
     memcpy(ptr, &node, sizeof(struct ast_node_t));
+    parse_context->id += 1;
     return ptr;
 }
 
 static struct ast_node_t* ast_parse_property(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
 static struct ast_node_t* ast_parse_string_literal(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
 static struct ast_node_t* ast_parse_char_literal(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
 static struct ast_node_t* ast_parse_integer_literal(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
 static struct ast_node_t* ast_parse_object(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
-static struct ast_node_t* ast_parse_object_result(
-    struct parse_context_t const parse_context[static const 1],
+static struct ast_node_t* ast_parse_property_value(
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
-static struct ast_node_t* ast_parse_object_property(
-    struct parse_context_t const parse_context[static const 1],
+static struct ast_node_t* ast_parse_object_copy(
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
 static struct ast_node_t* ast_parse_decorator(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 );
 
+static struct ast_node_t* ast_parse_string_literal(
+    struct parse_context_t parse_context[static const 1],
+    size_t token_index[static const 1]
+) {
+    struct token_t const* const token = (*parse_context->tokens)[*token_index];
+    if (token->type == TOKEN_STRING_LITERAL) {
+        *token_index += 1;
+        struct ast_node_t* const node =
+            ast_node_create(parse_context, NODE_TYPE_STRING_LITERAL, token);
+        node->data.string_literal.content = token_buffer(token);
+        return node;
+    } else {
+        return nullptr;
+    }
+}
+
+static struct ast_node_t* ast_parse_char_literal(
+    struct parse_context_t parse_context[static const 1],
+    size_t token_index[static const 1]
+) {
+    struct token_t const* const token = (*parse_context->tokens)[*token_index];
+    if (token->type == TOKEN_CHAR_LITERAL) {
+        *token_index += 1;
+        struct ast_node_t* const node =
+            ast_node_create(parse_context, NODE_TYPE_CHAR_LITERAL, token);
+        node->data.char_literal.c = token->data.char_literal.c;
+        return node;
+    } else {
+        return nullptr;
+    }
+}
+
+static struct ast_node_t* ast_parse_integer_literal(
+    struct parse_context_t parse_context[static const 1],
+    size_t token_index[static const 1]
+) {
+    struct token_t const* const token = (*parse_context->tokens)[*token_index];
+    if (token->type == TOKEN_INT) {
+        *token_index += 1;
+        struct ast_node_t* const node =
+            ast_node_create(parse_context, NODE_TYPE_INTEGER, token);
+        node->data.integer.content = token->data.integer.integer;
+        return node;
+    } else {
+        return nullptr;
+    }
+}
+
 // identifier ::= [A-Za-z][A-Za-z0-9_]*
 static struct ast_node_t* ast_parse_identifier(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 ) {
     struct token_t const* const token = (*parse_context->tokens)[*token_index];
@@ -133,34 +184,45 @@ static struct ast_node_t* ast_parse_identifier(
     }
 }
 
-// property ::= identifier assignment object_result ";"
+// property ::= identifier assignment property_value ";"
 static struct ast_node_t* ast_parse_property(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 ) {
+    size_t original_token_index = *token_index;
     struct ast_node_t* const identifier =
         ast_parse_identifier(parse_context, token_index);
     if (!identifier) {
+        *token_index = original_token_index;
         return nullptr;
     }
 
     struct token_t const* const assign_token =
         ast_eat_token(parse_context, token_index, TOKEN_ASSIGN);
 
+    struct ast_node_t* const property_value =
+        ast_parse_property_value(parse_context, token_index);
+    if (property_value == nullptr) {
+        *token_index = original_token_index;
+        return nullptr;
+    }
+
     struct ast_node_t* const node =
         ast_node_create(parse_context, NODE_TYPE_PROPERTY, assign_token);
-    node->data.property.identifier = identifier;
-    node->data.property.object_result =
-        ast_parse_object_result(parse_context, token_index);
+    node->data.property.identifier             = identifier;
+    node->data.property.property_value         = property_value;
+    node->data.property.identifier->parent     = node;
+    node->data.property.property_value->parent = node;
 
+    printf("index %ld\n", *token_index);
     ast_eat_token(parse_context, token_index, TOKEN_SEMICOLON);
 
     return node;
 }
 
-// object_result ::= object | STRING | CHAR | INTEGER | object_property
-static struct ast_node_t* ast_parse_object_result(
-    struct parse_context_t const parse_context[static const 1],
+// property_value ::= object | object_copy | STRING | CHAR | INTEGER
+static struct ast_node_t* ast_parse_property_value(
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 ) {
     struct ast_node_t* const object =
@@ -169,10 +231,10 @@ static struct ast_node_t* ast_parse_object_result(
         return object;
     }
 
-    struct ast_node_t* const object_property =
-        ast_parse_object_property(parse_context, token_index);
-    if (object_property) {
-        return object_property;
+    struct ast_node_t* const object_copy =
+        ast_parse_object_copy(parse_context, token_index);
+    if (object_copy) {
+        return object_copy;
     }
 
     struct ast_node_t* const string_literal =
@@ -196,130 +258,114 @@ static struct ast_node_t* ast_parse_object_result(
     return nullptr;
 }
 
-static struct ast_node_t* ast_parse_string_literal(
-    struct parse_context_t const parse_context[static const 1],
-    size_t token_index[static const 1]
-) {
-    struct token_t const* const token = (*parse_context->tokens)[*token_index];
-    if (token->type == TOKEN_STRING_LITERAL) {
-        *token_index += 1;
-        struct ast_node_t* const node =
-            ast_node_create(parse_context, NODE_TYPE_STRING_LITERAL, token);
-        node->data.string_literal.content = token_buffer(token);
-        return node;
-    } else {
-        return nullptr;
-    }
-}
-
-static struct ast_node_t* ast_parse_char_literal(
-    struct parse_context_t const parse_context[static const 1],
-    size_t token_index[static const 1]
-) {
-    struct token_t const* const token = (*parse_context->tokens)[*token_index];
-    if (token->type == TOKEN_CHAR_LITERAL) {
-        *token_index += 1;
-        struct ast_node_t* const node =
-            ast_node_create(parse_context, NODE_TYPE_CHAR_LITERAL, token);
-        node->data.char_literal.c = token->data.char_literal.c;
-        return node;
-    } else {
-        return nullptr;
-    }
-}
-
-static struct ast_node_t* ast_parse_integer_literal(
-    struct parse_context_t const parse_context[static const 1],
-    size_t token_index[static const 1]
-) {
-    struct token_t const* const token = (*parse_context->tokens)[*token_index];
-    if (token->type == TOKEN_INT) {
-        *token_index += 1;
-        struct ast_node_t* const node =
-            ast_node_create(parse_context, NODE_TYPE_INTEGER, token);
-        node->data.integer.content = token->data.integer.integer;
-        return node;
-    } else {
-        return nullptr;
-    }
-}
-
-// object_property ::= identifier ("(" object_result ("," object_result)+ ")")*
-// ("." object_property)?
-static struct ast_node_t* ast_parse_object_property(
-    struct parse_context_t const parse_context[static const 1],
+// free_object_copy_params ::= "(" property_value ("," property_value)* ")"
+static struct ast_node_t* ast_parse_free_object_copy_params(
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 ) {
     size_t const original_token_index = *token_index;
-    struct ast_node_t* const identifier =
-        ast_parse_identifier(parse_context, token_index);
-    if (!identifier) {
+    struct token_t const* next_token  = (*parse_context->tokens)[*token_index];
+
+    if (next_token->type == TOKEN_OPEN_PAREN) {
+        *token_index += 1;
+        next_token = (*parse_context->tokens)[*token_index];
+    } else {
+        *token_index = original_token_index;
         return nullptr;
     }
 
-    struct ast_node_t* node = identifier;
-
-    struct token_t const* next_token = (*parse_context->tokens)[*token_index];
-
-    while (next_token->type == TOKEN_OPEN_PAREN) {
-        *token_index += 1;
-        struct ast_node_t* const free_copy = ast_node_create(
-            parse_context, NODE_TYPE_FREE_OBJECT_COPY, next_token
-        );
-        free_copy->data.free_object_copy.property_list =
-            array(struct ast_node_t*, parse_context->allocator);
-        free_copy->data.free_object_copy.object = node;
-        while (true) {
-            struct ast_node_t* const object_result =
-                ast_parse_object_result(parse_context, token_index);
-            if (object_result) {
-                array_push(
-                    free_copy->data.free_object_copy.property_list,
-                    object_result
-                );
-            } else {
-                *token_index = original_token_index;
-                return nullptr;
-            }
-
-            next_token = (*parse_context->tokens)[*token_index];
-            if (next_token->type == TOKEN_CLOSE_PAREN) {
-                *token_index += 1;
-                next_token = (*parse_context->tokens)[*token_index];
-                node       = free_copy;
-                break;
-            } else if (next_token->type == TOKEN_COMMA) {
-                *token_index += 1;
-            } else {
-                *token_index = original_token_index;
-                return nullptr;
-            }
-        }
-    }
-
-    if (next_token->type == TOKEN_DOT) {
-        *token_index += 1;
-        struct ast_node_t* const object_property =
-            ast_parse_object_property(parse_context, token_index);
-        if (object_property) {
-            struct ast_node_t* const n = ast_node_create(
-                parse_context, NODE_TYPE_OBJECT_PROPERTY_ACCESS, next_token
+    struct ast_node_t* const free_copy = ast_node_create(
+        parse_context, NODE_TYPE_FREE_OBJECT_COPY_PARAMS, next_token
+    );
+    free_copy->data.free_object_copy_params.parameter_list =
+        array(struct ast_node_t*, parse_context->allocator);
+    while (true) {
+        struct ast_node_t* const property_value =
+            ast_parse_property_value(parse_context, token_index);
+        if (property_value) {
+            array_push(
+                free_copy->data.free_object_copy_params.parameter_list,
+                property_value
             );
-            n->data.object_property_access.object   = node;
-            n->data.object_property_access.property = object_property;
-            return n;
+            property_value->parent = free_copy;
+        } else {
+            *token_index = original_token_index;
+            return nullptr;
+        }
+
+        next_token = (*parse_context->tokens)[*token_index];
+        if (next_token->type == TOKEN_CLOSE_PAREN) {
+            *token_index += 1;
+            return free_copy;
+        } else if (next_token->type == TOKEN_COMMA) {
+            *token_index += 1;
         } else {
             *token_index = original_token_index;
             return nullptr;
         }
     }
 
-    return node;
+    return free_copy;
 }
 
-// object ::= (identifier+ ">")? "{" (decorator | property)* "}"
+// object_copy ::= identifier (free_object_copy)* ("." object_copy)?
+static struct ast_node_t* ast_parse_object_copy(
+    struct parse_context_t parse_context[static const 1],
+    size_t token_index[static const 1]
+) {
+    size_t const original_token_index = *token_index;
+    struct ast_node_t* const identifier =
+        ast_parse_identifier(parse_context, token_index);
+    if (!identifier) {
+        *token_index = original_token_index;
+        return nullptr;
+    }
+
+    struct token_t* next_token = (*parse_context->tokens)[*token_index];
+
+    struct ast_node_t* object_copy =
+        ast_node_create(parse_context, NODE_TYPE_OBJECT_COPY, next_token);
+    object_copy->data.object_copy.identifier = identifier;
+    identifier->parent                       = object_copy;
+    object_copy->data.object_copy.free_object_copies =
+        array(struct ast_node_t*, parse_context->allocator);
+
+    while (true) {
+        struct ast_node_t* free_object_copy =
+            ast_parse_free_object_copy_params(parse_context, token_index);
+        if (free_object_copy != nullptr) {
+            free_object_copy->parent = object_copy;
+            array_push(
+                object_copy->data.object_copy.free_object_copies,
+                free_object_copy
+            );
+        } else {
+            break;
+        }
+    }
+
+    next_token = (*parse_context->tokens)[*token_index];
+
+    if (next_token->type == TOKEN_DOT) {
+        *token_index += 1;
+        struct ast_node_t* const next_object_copy =
+            ast_parse_object_copy(parse_context, token_index);
+        if (next_object_copy) {
+            object_copy->data.object_copy.object_copy = next_object_copy;
+            next_object_copy->parent                  = object_copy;
+        } else {
+            *token_index = original_token_index;
+            return nullptr;
+        }
+    }
+
+    return object_copy;
+}
+
+// object ::= (identifier+ ">")? (("{" (decorator | property)* "}") |
+// object_copy)
 static struct ast_node_t* ast_parse_object(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 ) {
     struct token_t const* token = (*parse_context->tokens)[*token_index];
@@ -339,6 +385,7 @@ static struct ast_node_t* ast_parse_object(
                 ast_parse_identifier(parse_context, token_index);
             if (identifier) {
                 array_push(object->data.object.free_list, identifier);
+                identifier->parent = object;
                 continue;
             }
             struct token_t const* const next_token =
@@ -354,31 +401,42 @@ static struct ast_node_t* ast_parse_object(
         }
     }
 
+    token = (*parse_context->tokens)[*token_index];
+
     if (token->type == TOKEN_OPEN_BRACE) {
         *token_index += 1;
+        while (true) {
+            struct ast_node_t* const decorator =
+                ast_parse_decorator(parse_context, token_index);
+            if (decorator) {
+                array_push(object->data.object.property_list, decorator);
+                decorator->parent = object;
+                continue;
+            }
+
+            struct ast_node_t* const property =
+                ast_parse_property(parse_context, token_index);
+            if (property) {
+                array_push(object->data.object.property_list, property);
+                property->parent = object;
+                continue;
+            }
+
+            token = (*parse_context->tokens)[*token_index];
+            if (token->type == TOKEN_CLOSE_BRACE) {
+                *token_index += 1;
+                return object;
+            } else {
+                *token_index = original_token_index;
+                return nullptr;
+            }
+        }
     } else {
-        *token_index = original_token_index;
-        return nullptr;
-    }
-
-    while (true) {
-        struct ast_node_t* const decorator =
-            ast_parse_decorator(parse_context, token_index);
-        if (decorator) {
-            array_push(object->data.object.property_list, decorator);
-            continue;
-        }
-
-        struct ast_node_t* const property =
-            ast_parse_property(parse_context, token_index);
-        if (property) {
-            array_push(object->data.object.property_list, property);
-            continue;
-        }
-
-        token = (*parse_context->tokens)[*token_index];
-        if (token->type == TOKEN_CLOSE_BRACE) {
-            *token_index += 1;
+        struct ast_node_t* object_copy =
+            ast_parse_object_copy(parse_context, token_index);
+        if (object_copy != nullptr) {
+            object->data.object_copy.object_copy = object_copy;
+            object_copy->parent                  = object;
             return object;
         } else {
             *token_index = original_token_index;
@@ -389,21 +447,22 @@ static struct ast_node_t* ast_parse_object(
     vix_unreachable();
 }
 
-// decorator :== "..." object_result ";"
+// decorator :== "..." property_value ";"
 static struct ast_node_t* ast_parse_decorator(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 ) {
     struct token_t const* const token = (*parse_context->tokens)[*token_index];
     size_t const original_token_index = *token_index;
     if (token->type == TOKEN_DOT_DOT_DOT) {
         *token_index += 1;
-        struct ast_node_t* const object_result =
-            ast_parse_object_result(parse_context, token_index);
+        struct ast_node_t* const property_value =
+            ast_parse_property_value(parse_context, token_index);
         struct ast_node_t* const node =
             ast_node_create(parse_context, NODE_TYPE_DECORATOR, token);
-        if (object_result) {
-            node->data.decorator.object = object_result;
+        if (property_value) {
+            node->data.decorator.object = property_value;
+            property_value->parent      = node;
         } else {
             *token_index = original_token_index;
             return nullptr;
@@ -417,32 +476,26 @@ static struct ast_node_t* ast_parse_decorator(
 }
 
 // root ::= property*
-static void ast_parse_root_node(
-    struct parse_context_t const parse_context[static const 1],
-    size_t token_index[static const 1],
-    ast_node_ptr_array_t properties[static const 1]
-) {
-    while (true) {
-        struct ast_node_t* const property_node =
-            ast_parse_property(parse_context, token_index);
-        if (property_node) {
-            array_push(*properties, property_node);
-            continue;
-        }
-
-        return;
-    }
-}
-
 static struct ast_node_t* ast_parse_root(
-    struct parse_context_t const parse_context[static const 1],
+    struct parse_context_t parse_context[static const 1],
     size_t token_index[static const 1]
 ) {
     struct ast_node_t* const node = ast_node_create(
         parse_context, NODE_TYPE_ROOT, (*parse_context->tokens)[*token_index]
     );
     node->data.root.list = array(struct ast_node_t*, parse_context->allocator);
-    ast_parse_root_node(parse_context, token_index, &node->data.root.list);
+
+    while (true) {
+        struct ast_node_t* const property_node =
+            ast_parse_property(parse_context, token_index);
+        if (property_node) {
+            array_push(node->data.root.list, property_node);
+            property_node->parent = node;
+            continue;
+        }
+
+        break;
+    }
 
     return node;
 }
@@ -454,6 +507,7 @@ struct ast_node_t* ast_parse(
     enum error_color_t const error_color
 ) {
     struct parse_context_t parse_context = {
+        .id          = 0,
         .error_color = error_color,
         .source      = source,
         .owner       = owner,
@@ -490,39 +544,40 @@ void ast_visit_node_children(
     void (*visit)(struct ast_node_t*, void* context), void* context
 ) {
     switch (node->type) {
-    case NODE_TYPE_ROOT:
-        visit_node_list(node->data.root.list, visit, context);
-        break;
-    case NODE_TYPE_OBJECT:
-        visit_node_list(node->data.object.free_list, visit, context);
-        visit_node_list(node->data.object.property_list, visit, context);
-        break;
-    case NODE_TYPE_PROPERTY:
-        visit_field(node->data.property.identifier, visit, context);
-        visit_field(node->data.property.object_result, visit, context);
-        break;
-    case NODE_TYPE_FREE_OBJECT_COPY:
-        visit_field(node->data.free_object_copy.object, visit, context);
-        visit_node_list(
-            node->data.free_object_copy.property_list, visit, context
-        );
-        break;
-    case NODE_TYPE_OBJECT_PROPERTY_ACCESS:
-        visit_field(node->data.object_property_access.object, visit, context);
-        visit_field(
-            node->data.object_property_access.property, visit, context
-        );
-        break;
-    case NODE_TYPE_DECORATOR:
-        visit_field(node->data.decorator.object, visit, context);
-        break;
-    case NODE_TYPE_IDENTIFIER:
-        break;
-    case NODE_TYPE_STRING_LITERAL:
-        break;
-    case NODE_TYPE_CHAR_LITERAL:
-        break;
-    case NODE_TYPE_INTEGER:
-        break;
+        case NODE_TYPE_ROOT:
+            visit_node_list(node->data.root.list, visit, context);
+            break;
+        case NODE_TYPE_OBJECT:
+            visit_node_list(node->data.object.free_list, visit, context);
+            visit_node_list(node->data.object.property_list, visit, context);
+            break;
+        case NODE_TYPE_PROPERTY:
+            visit_field(node->data.property.identifier, visit, context);
+            visit_field(node->data.property.property_value, visit, context);
+            break;
+        case NODE_TYPE_FREE_OBJECT_COPY_PARAMS:
+            visit_node_list(
+                node->data.free_object_copy_params.parameter_list, visit,
+                context
+            );
+            break;
+        case NODE_TYPE_OBJECT_COPY:
+            visit_field(node->data.object_copy.identifier, visit, context);
+            visit_node_list(
+                node->data.object_copy.free_object_copies, visit, context
+            );
+            visit_field(node->data.object_copy.object_copy, visit, context);
+            break;
+        case NODE_TYPE_DECORATOR:
+            visit_field(node->data.decorator.object, visit, context);
+            break;
+        case NODE_TYPE_IDENTIFIER:
+            break;
+        case NODE_TYPE_STRING_LITERAL:
+            break;
+        case NODE_TYPE_CHAR_LITERAL:
+            break;
+        case NODE_TYPE_INTEGER:
+            break;
     }
 }

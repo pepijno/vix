@@ -17,7 +17,17 @@
           gdb
           valgrind
           nasm
-        ];
+          zlib
+          libxml2
+          asm-lsp
+          asmfmt
+        ] ++ (with llvmPackages_17; [
+          libclang
+          clang-unwrapped
+          clang
+          lld
+          llvm
+        ]);
       in
       rec {
         # `nix develop`

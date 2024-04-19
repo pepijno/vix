@@ -20,6 +20,7 @@ AlwaysBreakBeforeMultilineStrings: true
 BreakBeforeBraces: Attach
 ColumnLimit: 80
 IncludeBlocks: Regroup
+IndentCaseLabels: true
 InsertBraces: true
 InsertNewlineAtEOF: true
 KeepEmptyLinesAtTheStartOfBlocks: false

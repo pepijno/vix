@@ -8,6 +8,11 @@
 #include "util.h"
 
 #include <assert.h>
+#include <llvm-c/Analysis.h>
+#include <llvm-c/BitWriter.h>
+#include <llvm-c/Core.h>
+#include <llvm-c/ExecutionEngine.h>
+#include <llvm-c/Target.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -37,6 +42,63 @@ static struct str_t os_fetch_file(
 }
 
 int main(int const argc, char const* const argv[]) {
+    // // Initialize LLVM context and module
+    // LLVMContextRef context = LLVMContextCreate();
+    // LLVMModuleRef module = LLVMModuleCreateWithName("example");
+    //
+    // // Define the printf function signature: int32 (i8*, ...)
+    // LLVMTypeRef int32Type = LLVMInt32TypeInContext(context);
+    // LLVMTypeRef int8PtrType = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+    // LLVMTypeRef printfFuncType = LLVMFunctionType(int32Type, &int8PtrType, 1, 1);
+    // 
+    // // Declare the printf function
+    // LLVMValueRef printfFunc = LLVMAddFunction(module, "printf", printfFuncType);
+    // LLVMSetFunctionCallConv(printfFunc, LLVMCCallConv);
+    //
+    // // Define the function type: void (i8*)
+    // LLVMTypeRef voidType = LLVMVoidTypeInContext(context);
+    // LLVMTypeRef printFuncParamTypes[] = { int8PtrType };
+    // LLVMTypeRef printFuncType = LLVMFunctionType(voidType, printFuncParamTypes, 1, 0);
+    //
+    // // Create the function named 'printString'
+    // LLVMValueRef printStringFunc = LLVMAddFunction(module, "printString", printFuncType);
+    // LLVMSetFunctionCallConv(printStringFunc, LLVMCCallConv);
+    //
+    // // Create a basic block
+    // LLVMBasicBlockRef entryBlock = LLVMAppendBasicBlockInContext(context, printStringFunc, "entry");
+    // LLVMBuilderRef builder = LLVMCreateBuilderInContext(context);
+    // LLVMPositionBuilderAtEnd(builder, entryBlock);
+    //
+    // // Get function parameter
+    // LLVMValueRef strParam = LLVMGetParam(printStringFunc, 0);
+    //
+    // // Call printf function to print the string
+    // LLVMValueRef formatString = LLVMBuildGlobalStringPtr(builder, "%s\n", "");
+    // LLVMValueRef args[] = { formatString, strParam };
+    // LLVMValueRef callResult = LLVMBuildCall2(builder, voidType, printfFunc, args, 2, "");
+    //
+    // // Check if the call result is not null (error checking)
+    // LLVMBasicBlockRef exitBlock = LLVMAppendBasicBlockInContext(context, printStringFunc, "exit");
+    // LLVMBasicBlockRef continueBlock = LLVMAppendBasicBlockInContext(context, printStringFunc, "continue");
+    // LLVMValueRef zero = LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0);
+    // LLVMValueRef comparison = LLVMBuildICmp(builder, LLVMIntNE, callResult, zero, "cmp");
+    // LLVMBuildCondBr(builder, comparison, exitBlock, continueBlock);
+    // LLVMPositionBuilderAtEnd(builder, exitBlock);
+    // LLVMBuildRetVoid(builder);
+    // LLVMPositionBuilderAtEnd(builder, continueBlock);
+    //
+    // // Return void
+    // LLVMBuildRetVoid(builder);
+    //
+    // // Print out the LLVM IR
+    // char *irString = LLVMPrintModuleToString(module);
+    // printf("%s\n", irString);
+    //
+    // // Clean up
+    // LLVMDisposeMessage(irString);
+    // LLVMDisposeBuilder(builder);
+    // LLVMDisposeModule(module);
+    // LLVMContextDispose(context);
     if (argc < 2) {
         printf("Please provide a *.vix file to compile");
         exit(1);
@@ -74,8 +136,7 @@ int main(int const argc, char const* const argv[]) {
         .path         = path,
     };
     import_entry.root = ast_parse(
-        &allocator, source, tokenized.tokens, &import_entry,
-        ERROR_COLOR_ON
+        &allocator, source, tokenized.tokens, &import_entry, ERROR_COLOR_ON
     );
     assert(import_entry.root != nullptr);
 
@@ -92,11 +153,19 @@ int main(int const argc, char const* const argv[]) {
     };
     code_gen.errors                = array(struct error_message_t*, &allocator);
     code_gen.root_scope.properties = array(struct ast_node_t*, &allocator);
+    code_gen.data_strings          = array(struct string_data_t, &allocator);
 
+    struct str_buffer_t buffer = str_buffer_new(&allocator, 0);
     analyse(&code_gen, import_entry.root);
-    struct str_t generated = generate(&code_gen, import_entry.root);
+    generate(&code_gen, &buffer, import_entry.root);
 
-    printf(str_fmt"\n", str_args(generated));
+    FILE* temp = fopen("vix.c", "w");
+    if (temp) {
+        fprintf(temp, str_fmt, str_args(buffer));
+        fclose(temp);
+    }
+
+    system("gcc -O2 -Wall -Wextra -o vix vix.c");
 
     arena_reset(&arena);
     arena_free(&arena);

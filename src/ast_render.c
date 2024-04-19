@@ -22,10 +22,10 @@ static char* node_type_string(enum node_type_t const type) {
         return "Property";
     case NODE_TYPE_IDENTIFIER:
         return "Identifier";
-    case NODE_TYPE_FREE_OBJECT_COPY:
-        return "FreeObjectCopy";
-    case NODE_TYPE_OBJECT_PROPERTY_ACCESS:
-        return "ObjectPropertyAccess";
+    case NODE_TYPE_FREE_OBJECT_COPY_PARAMS:
+        return "FreeObjectCopyParams";
+    case NODE_TYPE_OBJECT_COPY:
+        return "ObjectCopy";
     case NODE_TYPE_DECORATOR:
         return "Decorator";
     case NODE_TYPE_ROOT:
@@ -41,7 +41,7 @@ static void ast_print_visit(struct ast_node_t* node, void* context) {
         fprintf(ast_print->f, " ");
     }
 
-    fprintf(ast_print->f, "%s ", node_type_string(node->type));
+    fprintf(ast_print->f, "%ld %s ", node->id, node_type_string(node->type));
     if (node->type == NODE_TYPE_IDENTIFIER) {
         fprintf(ast_print->f, "\""str_fmt"\"", str_args(node->data.identifier.content));
     } else if (node->type == NODE_TYPE_STRING_LITERAL) {

@@ -1,18 +1,12 @@
-true = {
-    if = whenTrue whenFalse > {
-        ...whenTrue;
-    };
-};
-false = {
-    if = whenTrue whenFalse > {
-        ...whenFalse;
-    };
+p = {
+	q = {
+		s = {
+			t = 5;
+		};
+	};
+	r = 3;
 };
 
-person = height length > {
-    name = "John";
-    age = name;
-    l = 5;
-};
+a = 5;
 
-main = print(5);
+main = p.q.s.t;

@@ -1,13 +1,14 @@
 #pragma once
 
 #include "allocator.h"
+#include "util.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 struct str_t {
-    char const* data;
+    char data[256];
     size_t length;
 };
 
@@ -21,10 +22,12 @@ static inline char str_at(struct str_t const str, size_t const index) {
 static inline struct str_t str_new_length(
     char const* const str, size_t const length
 ) {
-    return (struct str_t){
-        .data   = str,
+    assert(length <= 256);
+    struct str_t s = (struct str_t){
         .length = length,
     };
+    memcpy(s.data, str, length);
+    return s;
 }
 
 static inline struct str_t str_new_empty() {
@@ -39,9 +42,9 @@ static inline bool str_equal(struct str_t const str1, struct str_t const str2) {
     if (str1.length != str2.length) {
         return false;
     }
-    if (str1.data == nullptr) {
-        return true;
-    }
+    // if (str1.data == nullptr) {
+    //     return true;
+    // }
     return memcmp(str1.data, str2.data, str1.length) == 0;
 }
 
@@ -55,21 +58,23 @@ struct str_buffer_t {
 static void str_buffer_ensure_capacity(
     struct str_buffer_t str_buffer[static const 1], size_t const add_length
 ) {
-    size_t const available = str_buffer->capacity;
+    size_t const available = str_buffer->capacity - str_buffer->length;
     if (available >= add_length) {
         return;
     }
-    size_t const length          = str_buffer->length;
-    size_t const required_length = length + add_length;
+    size_t const length           = str_buffer->length;
+    size_t const required_length  = length + add_length;
     size_t const new_length       = 2 * required_length;
     struct allocator_t* allocator = str_buffer->allocator;
-    str_buffer->data              = allocator->reallocate(
+    void* new_data                = allocator->reallocate(
         str_buffer->data, sizeof(char) * length, sizeof(char) * new_length,
         allocator->context
     );
-    // if (!new_data) {
-    //     return NULL;
-    // }
+    if (!new_data) {
+        vix_unreachable();
+    } else {
+        str_buffer->data = new_data;
+    }
     str_buffer->capacity = new_length;
 }
 
@@ -87,20 +92,18 @@ static struct str_buffer_t str_buffer_new(
 }
 
 static void str_buffer_reset(struct str_buffer_t str_buffer[static const 1]) {
-    str_buffer->length = 0;
+    str_buffer->length   = 0;
+    str_buffer->capacity = 0;
 }
 
 static struct str_t str_buffer_str(
     struct str_buffer_t const str_buffer[static const 1]
 ) {
-    char* data = str_buffer->allocator->allocate(
-        sizeof(char) * str_buffer->length, str_buffer->allocator->context
-    );
-    memcpy(data, str_buffer->data, str_buffer->length);
-    return (struct str_t){
-        .data   = data,
+    struct str_t str = (struct str_t){
         .length = str_buffer->length,
     };
+    memcpy(str.data, str_buffer->data, str_buffer->length);
+    return str;
 }
 
 static void str_buffer_append_char(
@@ -176,6 +179,7 @@ static int str_buffer_append_vprintf(
     return length1;
 }
 
+// __attribute__((format(printf, 2, 3)))
 static int str_buffer_append_printf(
     struct str_buffer_t buffer[static const 1], struct str_t const format, ...
 ) {
