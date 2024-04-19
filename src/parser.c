@@ -18,10 +18,10 @@ typedef struct {
 } parse_context_t;
 
 static void ast_error(
-    parse_context_t const parse_context[static const 1],
-    token_t const token[static const 1], str_t message
+    parse_context_t parse_context[static 1], token_t token[static 1],
+    str_t message
 ) {
-    error_message_t const error = error_message_create_with_line(
+    error_message_t error = error_message_create_with_line(
         parse_context->allocator, parse_context->owner->path, token->start_line,
         token->start_column, parse_context->owner->source_code,
         parse_context->owner->line_offsets, message
@@ -31,7 +31,7 @@ static void ast_error(
     exit(EXIT_FAILURE);
 }
 
-static str_t token_buffer(token_t const token[static const 1]) {
+static str_t token_buffer(token_t token[static 1]) {
     assert(
         token->type == TOKEN_STRING_LITERAL || token->type == TOKEN_IDENTIFIER
     );
@@ -39,8 +39,8 @@ static str_t token_buffer(token_t const token[static const 1]) {
 }
 
 static void ast_expect_token(
-    parse_context_t const parse_context[static const 1],
-    token_t const token[static const 1], token_type_e const type
+    parse_context_t parse_context[static 1], token_t token[static 1],
+    token_type_e type
 ) {
     if (token->type == type) {
         return;
@@ -55,18 +55,18 @@ static void ast_expect_token(
 }
 
 static token_t* ast_eat_token(
-    parse_context_t const parse_context[static const 1],
-    size_t token_index[static const 1], token_type_e const type
+    parse_context_t parse_context[static 1], size_t token_index[static 1],
+    token_type_e type
 ) {
-    token_t* const token = (*parse_context->tokens)[*token_index];
+    token_t* token = (*parse_context->tokens)[*token_index];
     ast_expect_token(parse_context, token, type);
     *token_index += 1;
     return token;
 }
 
 static ast_node_t* ast_node_create(
-    parse_context_t parse_context[static const 1], node_type_e const type,
-    token_t const first_token[static const 1]
+    parse_context_t parse_context[static 1], node_type_e type,
+    token_t first_token[static 1]
 ) {
     ast_node_t node = {
         .id     = parse_context->id,
@@ -75,7 +75,7 @@ static ast_node_t* ast_node_create(
         .column = first_token->start_column,
         .owner  = parse_context->owner,
     };
-    ast_node_t* const ptr = (ast_node_t*) parse_context->allocator->allocate(
+    ast_node_t* ptr = (ast_node_t*) parse_context->allocator->allocate(
         sizeof(ast_node_t), parse_context->allocator->context
     );
     memcpy(ptr, &node, sizeof(ast_node_t));
@@ -84,46 +84,37 @@ static ast_node_t* ast_node_create(
 }
 
 static ast_node_t* ast_parse_property(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 static ast_node_t* ast_parse_string_literal(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 static ast_node_t* ast_parse_char_literal(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 static ast_node_t* ast_parse_integer_literal(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 static ast_node_t* ast_parse_object(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 static ast_node_t* ast_parse_property_value(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 static ast_node_t* ast_parse_object_copy(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 static ast_node_t* ast_parse_decorator(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 );
 
 static ast_node_t* ast_parse_string_literal(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    token_t const* const token = (*parse_context->tokens)[*token_index];
+    token_t* token = (*parse_context->tokens)[*token_index];
     if (token->type == TOKEN_STRING_LITERAL) {
         *token_index += 1;
-        ast_node_t* const node =
+        ast_node_t* node =
             ast_node_create(parse_context, NODE_TYPE_STRING_LITERAL, token);
         node->data.string_literal.content = token_buffer(token);
         return node;
@@ -133,13 +124,12 @@ static ast_node_t* ast_parse_string_literal(
 }
 
 static ast_node_t* ast_parse_char_literal(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    token_t const* const token = (*parse_context->tokens)[*token_index];
+    token_t* token = (*parse_context->tokens)[*token_index];
     if (token->type == TOKEN_CHAR_LITERAL) {
         *token_index += 1;
-        ast_node_t* const node =
+        ast_node_t* node =
             ast_node_create(parse_context, NODE_TYPE_CHAR_LITERAL, token);
         node->data.char_literal.c = token->data.char_literal.c;
         return node;
@@ -149,13 +139,12 @@ static ast_node_t* ast_parse_char_literal(
 }
 
 static ast_node_t* ast_parse_integer_literal(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    token_t const* const token = (*parse_context->tokens)[*token_index];
+    token_t* token = (*parse_context->tokens)[*token_index];
     if (token->type == TOKEN_INT) {
         *token_index += 1;
-        ast_node_t* const node =
+        ast_node_t* node =
             ast_node_create(parse_context, NODE_TYPE_INTEGER, token);
         node->data.integer.content = token->data.integer.integer;
         return node;
@@ -166,13 +155,12 @@ static ast_node_t* ast_parse_integer_literal(
 
 // identifier ::= [A-Za-z][A-Za-z0-9_]*
 static ast_node_t* ast_parse_identifier(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    token_t const* const token = (*parse_context->tokens)[*token_index];
+    token_t* token = (*parse_context->tokens)[*token_index];
     if (token->type == TOKEN_IDENTIFIER) {
         *token_index += 1;
-        ast_node_t* const node =
+        ast_node_t* node =
             ast_node_create(parse_context, NODE_TYPE_IDENTIFIER, token);
         node->data.identifier.content = token_buffer(token);
         assert(node->data.identifier.content.length != 0);
@@ -184,28 +172,26 @@ static ast_node_t* ast_parse_identifier(
 
 // property ::= identifier assignment property_value ";"
 static ast_node_t* ast_parse_property(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
     size_t original_token_index = *token_index;
-    ast_node_t* const identifier =
-        ast_parse_identifier(parse_context, token_index);
+    ast_node_t* identifier = ast_parse_identifier(parse_context, token_index);
     if (!identifier) {
         *token_index = original_token_index;
         return nullptr;
     }
 
-    token_t const* const assign_token =
+    token_t* assign_token =
         ast_eat_token(parse_context, token_index, TOKEN_ASSIGN);
 
-    ast_node_t* const property_value =
+    ast_node_t* property_value =
         ast_parse_property_value(parse_context, token_index);
     if (property_value == nullptr) {
         *token_index = original_token_index;
         return nullptr;
     }
 
-    ast_node_t* const node =
+    ast_node_t* node =
         ast_node_create(parse_context, NODE_TYPE_PROPERTY, assign_token);
     node->data.property.identifier             = identifier;
     node->data.property.property_value         = property_value;
@@ -220,34 +206,31 @@ static ast_node_t* ast_parse_property(
 
 // property_value ::= object | object_copy | STRING | CHAR | INTEGER
 static ast_node_t* ast_parse_property_value(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    ast_node_t* const object = ast_parse_object(parse_context, token_index);
+    ast_node_t* object = ast_parse_object(parse_context, token_index);
     if (object) {
         return object;
     }
 
-    ast_node_t* const object_copy =
-        ast_parse_object_copy(parse_context, token_index);
+    ast_node_t* object_copy = ast_parse_object_copy(parse_context, token_index);
     if (object_copy) {
         return object_copy;
     }
 
-    ast_node_t* const string_literal =
+    ast_node_t* string_literal =
         ast_parse_string_literal(parse_context, token_index);
     if (string_literal) {
         return string_literal;
     }
 
-    ast_node_t* const char_literal =
+    ast_node_t* char_literal =
         ast_parse_char_literal(parse_context, token_index);
     if (char_literal) {
         return char_literal;
     }
 
-    ast_node_t* const integer =
-        ast_parse_integer_literal(parse_context, token_index);
+    ast_node_t* integer = ast_parse_integer_literal(parse_context, token_index);
     if (integer) {
         return integer;
     }
@@ -257,11 +240,10 @@ static ast_node_t* ast_parse_property_value(
 
 // free_object_copy_params ::= "(" property_value ("," property_value)* ")"
 static ast_node_t* ast_parse_free_object_copy_params(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    size_t const original_token_index = *token_index;
-    token_t const* next_token         = (*parse_context->tokens)[*token_index];
+    size_t original_token_index = *token_index;
+    token_t* next_token         = (*parse_context->tokens)[*token_index];
 
     if (next_token->type == TOKEN_OPEN_PAREN) {
         *token_index += 1;
@@ -271,13 +253,13 @@ static ast_node_t* ast_parse_free_object_copy_params(
         return nullptr;
     }
 
-    ast_node_t* const free_copy = ast_node_create(
+    ast_node_t* free_copy = ast_node_create(
         parse_context, NODE_TYPE_FREE_OBJECT_COPY_PARAMS, next_token
     );
     free_copy->data.free_object_copy_params.parameter_list =
         array(ast_node_t*, parse_context->allocator);
     while (true) {
-        ast_node_t* const property_value =
+        ast_node_t* property_value =
             ast_parse_property_value(parse_context, token_index);
         if (property_value) {
             array_push(
@@ -307,12 +289,10 @@ static ast_node_t* ast_parse_free_object_copy_params(
 
 // object_copy ::= identifier (free_object_copy)* ("." object_copy)?
 static ast_node_t* ast_parse_object_copy(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    size_t const original_token_index = *token_index;
-    ast_node_t* const identifier =
-        ast_parse_identifier(parse_context, token_index);
+    size_t original_token_index = *token_index;
+    ast_node_t* identifier = ast_parse_identifier(parse_context, token_index);
     if (!identifier) {
         *token_index = original_token_index;
         return nullptr;
@@ -345,7 +325,7 @@ static ast_node_t* ast_parse_object_copy(
 
     if (next_token->type == TOKEN_DOT) {
         *token_index += 1;
-        ast_node_t* const next_object_copy =
+        ast_node_t* next_object_copy =
             ast_parse_object_copy(parse_context, token_index);
         if (next_object_copy) {
             object_copy->data.object_copy.object_copy = next_object_copy;
@@ -362,31 +342,29 @@ static ast_node_t* ast_parse_object_copy(
 // object ::= (identifier+ ">")? (("{" (decorator | property)* "}") |
 // object_copy)
 static ast_node_t* ast_parse_object(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    token_t const* token = (*parse_context->tokens)[*token_index];
+    token_t* token = (*parse_context->tokens)[*token_index];
 
-    ast_node_t* const object =
+    ast_node_t* object =
         ast_node_create(parse_context, NODE_TYPE_OBJECT, token);
     object->data.object.free_list =
         array(ast_node_t*, parse_context->allocator);
     object->data.object.property_list =
         array(ast_node_t*, parse_context->allocator);
 
-    size_t const original_token_index = *token_index;
+    size_t original_token_index = *token_index;
 
     if (token->type == TOKEN_IDENTIFIER) {
         while (true) {
-            ast_node_t* const identifier =
+            ast_node_t* identifier =
                 ast_parse_identifier(parse_context, token_index);
             if (identifier) {
                 array_push(object->data.object.free_list, identifier);
                 identifier->parent = object;
                 continue;
             }
-            token_t const* const next_token =
-                (*parse_context->tokens)[*token_index];
+            token_t* next_token = (*parse_context->tokens)[*token_index];
             if (next_token->type == TOKEN_GREATER_THAN) {
                 *token_index += 1;
                 token = (*parse_context->tokens)[*token_index];
@@ -403,7 +381,7 @@ static ast_node_t* ast_parse_object(
     if (token->type == TOKEN_OPEN_BRACE) {
         *token_index += 1;
         while (true) {
-            ast_node_t* const decorator =
+            ast_node_t* decorator =
                 ast_parse_decorator(parse_context, token_index);
             if (decorator) {
                 array_push(object->data.object.property_list, decorator);
@@ -411,7 +389,7 @@ static ast_node_t* ast_parse_object(
                 continue;
             }
 
-            ast_node_t* const property =
+            ast_node_t* property =
                 ast_parse_property(parse_context, token_index);
             if (property) {
                 array_push(object->data.object.property_list, property);
@@ -446,16 +424,15 @@ static ast_node_t* ast_parse_object(
 
 // decorator :== "..." property_value ";"
 static ast_node_t* ast_parse_decorator(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    token_t const* const token        = (*parse_context->tokens)[*token_index];
-    size_t const original_token_index = *token_index;
+    token_t* token              = (*parse_context->tokens)[*token_index];
+    size_t original_token_index = *token_index;
     if (token->type == TOKEN_DOT_DOT_DOT) {
         *token_index += 1;
-        ast_node_t* const property_value =
+        ast_node_t* property_value =
             ast_parse_property_value(parse_context, token_index);
-        ast_node_t* const node =
+        ast_node_t* node =
             ast_node_create(parse_context, NODE_TYPE_DECORATOR, token);
         if (property_value) {
             node->data.decorator.object = property_value;
@@ -474,16 +451,15 @@ static ast_node_t* ast_parse_decorator(
 
 // root ::= property*
 static ast_node_t* ast_parse_root(
-    parse_context_t parse_context[static const 1],
-    size_t token_index[static const 1]
+    parse_context_t parse_context[static 1], size_t token_index[static 1]
 ) {
-    ast_node_t* const node = ast_node_create(
+    ast_node_t* node = ast_node_create(
         parse_context, NODE_TYPE_ROOT, (*parse_context->tokens)[*token_index]
     );
     node->data.root.list = array(ast_node_t*, parse_context->allocator);
 
     while (true) {
-        ast_node_t* const property_node =
+        ast_node_t* property_node =
             ast_parse_property(parse_context, token_index);
         if (property_node) {
             array_push(node->data.root.list, property_node);
@@ -498,9 +474,9 @@ static ast_node_t* ast_parse_root(
 }
 
 ast_node_t* ast_parse(
-    allocator_t allocator[static const 1], str_t source,
-    token_ptr_array_t tokens[static const 1],
-    import_table_entry_t owner[static const 1], error_color_e const error_color
+    allocator_t allocator[static 1], str_t source,
+    token_ptr_array_t tokens[static 1], import_table_entry_t owner[static 1],
+    error_color_e error_color
 ) {
     parse_context_t parse_context = {
         .id          = 0,
@@ -534,7 +510,7 @@ static void visit_node_list(
 }
 
 void ast_visit_node_children(
-    ast_node_t node[static const 1], void (*visit)(ast_node_t*, void* context),
+    ast_node_t node[static 1], void (*visit)(ast_node_t*, void* context),
     void* context
 ) {
     switch (node->type) {

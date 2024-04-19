@@ -6,11 +6,11 @@
 #include <string.h>
 
 typedef struct {
-    void* (*allocate)(size_t const size, void* context);
+    void* (*allocate)(size_t size, void* context);
     void* (*reallocate)(
-        void* ptr, size_t const old_size, size_t const new_size, void* context
+        void* ptr, size_t old_size, size_t new_size, void* context
     );
-    void (*free)(void* ptr, size_t const size, void* context);
+    void (*free)(void* ptr, size_t size, void* context);
     void* context;
 } allocator_t;
 
@@ -24,8 +24,8 @@ struct region_t {
 
 #define REGION_DEFAULT_CAPACITY (8 * 1024)
 
-static region_t* new_region(size_t const capacity) {
-    size_t const size_bytes = sizeof(region_t) + sizeof(uintptr_t) * capacity;
+static region_t* new_region(size_t capacity) {
+    size_t size_bytes = sizeof(region_t) + sizeof(uintptr_t) * capacity;
     region_t* region        = malloc(size_bytes);
     assert(region);
     region->next     = NULL;
@@ -43,9 +43,9 @@ static void free_region(region_t* region) {
     free(region);
 }
 
-static void* arena_allocate(size_t const size_bytes, void* const context) {
-    arena_t* const arena = (arena_t*) context;
-    size_t const size =
+static void* arena_allocate(size_t size_bytes, void* context) {
+    arena_t* arena = (arena_t*) context;
+    size_t size =
         (size_bytes + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
 
     if (arena->end == NULL) {
@@ -79,8 +79,8 @@ static void* arena_allocate(size_t const size_bytes, void* const context) {
 }
 
 static void* arena_reallocate(
-    void* const old_ptr, size_t const old_size, size_t const new_size,
-    void* const context
+    void* old_ptr, size_t old_size, size_t new_size,
+    void* context
 ) {
     if (new_size <= old_size) {
         return old_ptr;
@@ -112,7 +112,7 @@ static void arena_free(arena_t* a) {
     a->end   = NULL;
 }
 
-static void empty_free(void* ptr, size_t const size, void* context) {
+static void empty_free(void* ptr, size_t size, void* context) {
     (void) ptr;
     (void) size;
     (void) context;

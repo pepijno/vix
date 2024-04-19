@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 // __attribute__((format(printf, 1, 2)))
-[[__noreturn__]] static void vix_panic(char const* const format, ...) {
+[[__noreturn__]] static void vix_panic(char* format, ...) {
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "%s:%d ", __FILE__, __LINE__);

@@ -20,22 +20,19 @@ struct error_message_t {
 };
 
 void print_error_message(
-    error_message_t const error_message[static const 1],
-    error_color_e const color
+    error_message_t error_message[static 1], error_color_e color
 );
 
 void error_message_add_note(
-    error_message_t parent[static const 1], error_message_t note[static const 1]
+    error_message_t parent[static 1], error_message_t note[static 1]
 );
 
 error_message_t error_message_create_with_offset(
-    allocator_t allocator[static const 1], str_t const path, size_t const line,
-    size_t const column, size_t const offset, str_t const source,
-    str_t const message
+    allocator_t allocator[static 1], str_t path, size_t line, size_t column,
+    size_t offset, str_t source, str_t message
 );
 
 error_message_t error_message_create_with_line(
-    allocator_t allocator[static const 1], str_t const path, size_t const line,
-    size_t const column, str_t const source, size_t const* const line_offsets,
-    str_t const message
+    allocator_t allocator[static 1], str_t path, size_t line, size_t column,
+    str_t source, size_t* line_offsets, str_t message
 );

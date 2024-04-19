@@ -7,7 +7,7 @@ typedef struct scope_t scope_t;
 struct scope_t {
     ast_node_t const* const source_node;
     scope_t* parent;
-    ast_node_t const** properties;
+    ast_node_t** properties;
 };
 
 typedef struct {
@@ -26,12 +26,12 @@ typedef struct {
 } code_gen_t;
 
 void analyse(
-    code_gen_t code_gen[static const 1],
-    ast_node_t const root[static const 1]
+    code_gen_t code_gen[static 1],
+    ast_node_t root[static 1]
 );
 
 void generate(
-    code_gen_t code_gen[static const 1],
-    str_buffer_t buffer[static const 1],
-    ast_node_t const root[static const 1]
+    code_gen_t code_gen[static 1],
+    str_buffer_t buffer[static 1],
+    ast_node_t root[static 1]
 );

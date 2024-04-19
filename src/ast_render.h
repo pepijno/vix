@@ -4,4 +4,4 @@
 
 #include <stdio.h>
 
-void ast_print(FILE* const f, ast_node_t* node, size_t const indent);
+void ast_print(FILE* f, ast_node_t* node, size_t indent);

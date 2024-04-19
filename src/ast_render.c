@@ -8,7 +8,7 @@ typedef struct {
     FILE* const f;
 } ast_print_t;
 
-static char* node_type_string(node_type_e const type) {
+static char* node_type_string(node_type_e type) {
     switch (type) {
         case NODE_TYPE_STRING_LITERAL:
             return "StringLiteral";
@@ -35,7 +35,7 @@ static char* node_type_string(node_type_e const type) {
 }
 
 static void ast_print_visit(ast_node_t* node, void* context) {
-    ast_print_t const* const ast_print = (ast_print_t*) context;
+    ast_print_t* ast_print = (ast_print_t*) context;
 
     for (size_t i = 0; i < ast_print->indent; ++i) {
         fprintf(ast_print->f, " ");
@@ -69,7 +69,7 @@ static void ast_print_visit(ast_node_t* node, void* context) {
     ast_visit_node_children(node, ast_print_visit, &new_ast_print);
 }
 
-void ast_print(FILE* const f, ast_node_t* node, size_t const indent) {
+void ast_print(FILE* f, ast_node_t* node, size_t indent) {
     ast_print_t ast_print = {.f = f, .indent = indent};
     ast_visit_node_children(node, ast_print_visit, &ast_print);
 }

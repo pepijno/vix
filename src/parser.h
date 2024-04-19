@@ -94,11 +94,11 @@ struct ast_node_t {
 };
 
 void ast_visit_node_children(
-    ast_node_t node[static const 1], void (*visit)(ast_node_t*, void* context),
+    ast_node_t node[static 1], void (*visit)(ast_node_t*, void* context),
     void* context
 );
 ast_node_t* ast_parse(
-    allocator_t allocator[static const 1], str_t source,
-    token_ptr_array_t tokens[static const 1],
-    import_table_entry_t owner[static const 1], error_color_e const error_color
+    allocator_t allocator[static 1], str_t source,
+    token_ptr_array_t tokens[static 1],
+    import_table_entry_t owner[static 1], error_color_e error_color
 );

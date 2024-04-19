@@ -26,7 +26,7 @@ typedef enum {
 #define VT_WHITE "\x1b[37;1m"
 #define VT_RESET "\x1b[0m"
 
-static void set_color_posix(term_color_e const color) {
+static void set_color_posix(term_color_e color) {
     switch (color) {
         case TERM_COLOR_RED:
             fprintf(stderr, VT_RED);
@@ -47,15 +47,15 @@ static void set_color_posix(term_color_e const color) {
 }
 
 static void print_error_message_type(
-    error_message_t const error_message[static const 1],
-    error_color_e const color, error_type_e const error_type
+    error_message_t error_message[static 1],
+    error_color_e color, error_type_e error_type
 ) {
-    str_t const path  = error_message->path;
-    size_t const line = error_message->line_start + 1;
-    size_t const col  = error_message->column_start + 1;
-    str_t const text  = error_message->message;
+    str_t path  = error_message->path;
+    size_t line = error_message->line_start + 1;
+    size_t col  = error_message->column_start + 1;
+    str_t text  = error_message->message;
 
-    bool const is_tty = isatty(STDERR_FILENO) != 0;
+    bool is_tty = isatty(STDERR_FILENO) != 0;
     if (color == ERROR_COLOR_ON || (color == ERROR_COLOR_AUTO && is_tty)) {
         if (error_type == ERROR_TYPE_ERROR) {
             set_color_posix(TERM_COLOR_WHITE);
@@ -104,28 +104,28 @@ static void print_error_message_type(
     }
 
     for (size_t i = 0; i < array_length_unsigned(error_message->notes); ++i) {
-        error_message_t const* const note = error_message->notes[i];
+        error_message_t * note = error_message->notes[i];
         print_error_message_type(note, color, ERROR_TYPE_NOTE);
     }
 }
 
 void print_error_message(
-    error_message_t const error_message[static const 1],
-    error_color_e const color
+    error_message_t error_message[static 1],
+    error_color_e color
 ) {
     print_error_message_type(error_message, color, ERROR_TYPE_ERROR);
 }
 
 void error_message_add_note(
-    error_message_t parent[static const 1], error_message_t note[static const 1]
+    error_message_t parent[static 1], error_message_t note[static 1]
 ) {
     array_push(parent->notes, note);
 }
 
 error_message_t error_message_create_with_offset(
-    allocator_t allocator[static const 1], str_t const path, size_t const line,
-    size_t const column, size_t const offset, str_t const source,
-    str_t const message
+    allocator_t allocator[static 1], str_t path, size_t line,
+    size_t column, size_t offset, str_t source,
+    str_t message
 ) {
     error_message_t error_message = {
         .path         = path,
@@ -163,9 +163,9 @@ error_message_t error_message_create_with_offset(
 }
 
 error_message_t error_message_create_with_line(
-    allocator_t allocator[static const 1], str_t const path, size_t const line,
-    size_t const column, str_t const source, size_t const* const line_offsets,
-    str_t const message
+    allocator_t allocator[static 1], str_t path, size_t line,
+    size_t column, str_t source, size_t * line_offsets,
+    str_t message
 ) {
     error_message_t error_message = {
         .path         = path,
@@ -175,13 +175,13 @@ error_message_t error_message_create_with_line(
     };
     error_message.notes = array(error_message_t*, allocator);
 
-    size_t const line_start_offset = line_offsets[line];
-    size_t const end_line          = line + 1;
-    size_t const line_end_offset =
+    size_t line_start_offset = line_offsets[line];
+    size_t end_line          = line + 1;
+    size_t line_end_offset =
         (end_line >= array_header(line_offsets)->length)
             ? source.length
             : line_offsets[line + 1];
-    size_t const length = (line_end_offset + 1 > line_start_offset)
+    size_t length = (line_end_offset + 1 > line_start_offset)
                             ? (line_end_offset - line_start_offset - 1)
                             : 0;
 

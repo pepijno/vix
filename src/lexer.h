@@ -63,8 +63,8 @@ typedef struct {
 } tokenized_t;
 
 void tokenize(
-    allocator_t allocator[static const 1], str_t const source,
-    token_ptr_array_t tokens[static const 1], tokenized_t out[static const 1]
+    allocator_t allocator[static 1], str_t source,
+    token_ptr_array_t tokens[static 1], tokenized_t out[static 1]
 );
-char const* token_name(token_type_e const type);
+char * token_name(token_type_e type);
 void print_tokens(str_t source, token_ptr_array_t tokens);

@@ -15,11 +15,11 @@ typedef struct str_t {
 #define str_fmt     "%.*s"
 #define str_args(s) (int) (s).length, (s).data
 
-static inline char str_at(str_t const str, size_t const index) {
+static inline char str_at(str_t str, size_t index) {
     return str.data[index];
 }
 
-static inline str_t str_new_length(char const* const str, size_t const length) {
+static inline str_t str_new_length(char* str, size_t length) {
     assert(length <= 256);
     str_t s = (str_t){
         .length = length,
@@ -32,11 +32,11 @@ static inline str_t str_new_empty() {
     return str_new_length(nullptr, 0);
 }
 
-static inline str_t str_new(char const* const string) {
+static inline str_t str_new(char* string) {
     return str_new_length(string, strlen(string));
 }
 
-static inline bool str_equal(str_t const str1, str_t const str2) {
+static inline bool str_equal(str_t str1, str_t str2) {
     if (str1.length != str2.length) {
         return false;
     }
@@ -54,17 +54,17 @@ typedef struct str_buffer_t {
 } str_buffer_t;
 
 static void str_buffer_ensure_capacity(
-    str_buffer_t str_buffer[static const 1], size_t const add_length
+    str_buffer_t str_buffer[static 1], size_t add_length
 ) {
-    size_t const available = str_buffer->capacity - str_buffer->length;
+    size_t available = str_buffer->capacity - str_buffer->length;
     if (available >= add_length) {
         return;
     }
-    size_t const length          = str_buffer->length;
-    size_t const required_length = length + add_length;
-    size_t const new_length      = 2 * required_length;
-    allocator_t* allocator       = str_buffer->allocator;
-    void* new_data               = allocator->reallocate(
+    size_t length          = str_buffer->length;
+    size_t required_length = length + add_length;
+    size_t new_length      = 2 * required_length;
+    allocator_t* allocator = str_buffer->allocator;
+    void* new_data         = allocator->reallocate(
         str_buffer->data, sizeof(char) * length, sizeof(char) * new_length,
         allocator->context
     );
@@ -77,7 +77,7 @@ static void str_buffer_ensure_capacity(
 }
 
 static str_buffer_t str_buffer_new(
-    allocator_t allocator[static const 1], size_t const capacity
+    allocator_t allocator[static 1], size_t capacity
 ) {
     str_buffer_t buffer = {
         .data      = nullptr,
@@ -89,12 +89,12 @@ static str_buffer_t str_buffer_new(
     return buffer;
 }
 
-static void str_buffer_reset(str_buffer_t str_buffer[static const 1]) {
+static void str_buffer_reset(str_buffer_t str_buffer[static 1]) {
     str_buffer->length   = 0;
     str_buffer->capacity = 0;
 }
 
-static str_t str_buffer_str(str_buffer_t const str_buffer[static const 1]) {
+static str_t str_buffer_str(str_buffer_t str_buffer[static 1]) {
     str_t str = (str_t){
         .length = str_buffer->length,
     };
@@ -102,24 +102,20 @@ static str_t str_buffer_str(str_buffer_t const str_buffer[static const 1]) {
     return str;
 }
 
-static void str_buffer_append_char(
-    str_buffer_t str_buffer[static const 1], char const c
-) {
+static void str_buffer_append_char(str_buffer_t str_buffer[static 1], char c) {
     str_buffer_ensure_capacity(str_buffer, 1);
     str_buffer->data[str_buffer->length] = c;
     str_buffer->length += 1;
 }
 
-static void str_buffer_append(
-    str_buffer_t str_buffer[static const 1], str_t const str
-) {
+static void str_buffer_append(str_buffer_t str_buffer[static 1], str_t str) {
     str_buffer_ensure_capacity(str_buffer, str.length);
     memcpy(str_buffer->data + str_buffer->length, str.data, str.length);
     str_buffer->length += str.length;
 }
 
 static int str_buffer_vprintf(
-    str_buffer_t buffer[static const 1], str_t const format, va_list ap
+    str_buffer_t buffer[static 1], str_t format, va_list ap
 ) {
     str_buffer_reset(buffer);
 
@@ -141,9 +137,7 @@ static int str_buffer_vprintf(
     return length1;
 }
 
-static int str_buffer_printf(
-    str_buffer_t buffer[static const 1], str_t const format, ...
-) {
+static int str_buffer_printf(str_buffer_t buffer[static 1], str_t format, ...) {
     va_list ap;
     va_start(ap, format);
     int length = str_buffer_vprintf(buffer, format, ap);
@@ -152,7 +146,7 @@ static int str_buffer_printf(
 }
 
 static int str_buffer_append_vprintf(
-    str_buffer_t buffer[static const 1], str_t const format, va_list ap
+    str_buffer_t buffer[static 1], str_t format, va_list ap
 ) {
     va_list ap2;
     va_copy(ap2, ap);
@@ -175,7 +169,7 @@ static int str_buffer_append_vprintf(
 
 // __attribute__((format(printf, 2, 3)))
 static int str_buffer_append_printf(
-    str_buffer_t buffer[static const 1], str_t const format, ...
+    str_buffer_t buffer[static 1], str_t format, ...
 ) {
     va_list ap;
     va_start(ap, format);

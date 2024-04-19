@@ -9,9 +9,9 @@ typedef struct {
     allocator_t* allocator;
 } array_header_t;
 
-static void* array_init(allocator_t* allocator, size_t const item_size) {
-    void* ptr         = 0;
-    size_t const size = 4 * item_size + sizeof(array_header_t);
+static void* array_init(allocator_t* allocator, size_t item_size) {
+    void* ptr   = 0;
+    size_t size = 4 * item_size + sizeof(array_header_t);
     array_header_t* header =
         (array_header_t*) allocator->allocate(size, allocator->context);
 
@@ -36,11 +36,9 @@ static void* array_init(allocator_t* allocator, size_t const item_size) {
 #define array_length_unsigned(array) \
     ((array) ? array_header(array)->length : (size_t) 0)
 
-static void* array_grow(
-    void* array, size_t const add_length, size_t const capacity
-) {
+static void* array_grow(void* array, size_t add_length, size_t capacity) {
     array_header_t* header = array_header(array);
-    size_t const minimum_length   = header->length + add_length;
+    size_t minimum_length  = header->length + add_length;
 
     size_t minimum_capacity = capacity;
     // compute the minimum capacity needed
@@ -59,10 +57,9 @@ static void* array_grow(
         minimum_capacity = 4;
     }
 
-    size_t const item_size = (array) ? header->item_size : 0;
-    size_t const size      = item_size * minimum_capacity + sizeof(*header);
-    size_t const old_size =
-        sizeof(*header) + header->length * header->item_size;
+    size_t item_size = (array) ? header->item_size : 0;
+    size_t size      = item_size * minimum_capacity + sizeof(*header);
+    size_t old_size  = sizeof(*header) + header->length * header->item_size;
 
     array_header_t* new_header =
         (array_header_t*) header->allocator->reallocate(
