@@ -93,22 +93,22 @@ typedef enum {
     TOKENIZE_STATE_SAW_DOT_DOT,
     TOKENIZE_STATE_SAW_DIGIT,
     TOKENIZE_STATE_ERROR,
-} tokenize_state_e;
+} TokenizeState;
 
 typedef struct {
-    str_t source;
-    tokenized_t* const out;
-    token_ptr_array_t* tokens;
-    allocator_t* allocator;
+    Str source;
+    Tokenized* const out;
+    TokenPtrArray* tokens;
+    Allocator* allocator;
 
-    size_t position;
-    tokenize_state_e state;
-    size_t line;
-    size_t column;
-    token_t* current_token;
-} tokenize_t;
+    i64 position;
+    TokenizeState state;
+    i64 line;
+    i64 column;
+    Token* current_token;
+} Tokenize;
 
-static void set_token_type(token_t token[static 1], token_type_e type) {
+static void set_token_type(Token token[static 1], TokenType type) {
     token->type = type;
 
     if (type == TOKEN_STRING_LITERAL) {
@@ -120,10 +120,10 @@ static void set_token_type(token_t token[static 1], token_type_e type) {
     }
 }
 
-static void begin_token(tokenize_t t[static 1], token_type_e type) {
+static void begin_token(Tokenize t[static 1], TokenType type) {
     assert(!t->current_token);
-    token_t* token = (token_t*) t->allocator->allocate(
-        sizeof(token_t), t->allocator->context
+    Token* token = (Token*) t->allocator->allocate(
+        sizeof(Token), t->allocator->context
     );
     token->start_line     = t->line;
     token->start_column   = t->column;
@@ -133,16 +133,14 @@ static void begin_token(tokenize_t t[static 1], token_type_e type) {
     t->current_token = token;
 }
 
-static void end_token(tokenize_t t[static 1]) {
+static void end_token(Tokenize t[static 1]) {
     assert(t->current_token);
     t->current_token->end_position = t->position + 1;
-
-    // if (t->current_token
 
     t->current_token = NULL;
 }
 
-static void tokenize_error(tokenize_t t[static 1], str_t str) {
+static void tokenize_error(Tokenize t[static 1], Str str) {
     t->state = TOKENIZE_STATE_ERROR;
 
     if (t->current_token) {
@@ -157,7 +155,7 @@ static void tokenize_error(tokenize_t t[static 1], str_t str) {
 }
 
 static void handle_string_escape(
-    tokenize_t t[static 1], str_buffer_t str_buffer[static 1], char c
+    Tokenize t[static 1], StrBuffer str_buffer[static 1], u8 c
 ) {
     if (t->current_token->type == TOKEN_CHAR_LITERAL) {
         t->current_token->data.char_literal.c = c;
@@ -171,10 +169,10 @@ static void handle_string_escape(
 }
 
 void tokenize(
-    allocator_t allocator[static 1], str_t source,
-    token_ptr_array_t tokens[static 1], tokenized_t out[static 1]
+    Allocator allocator[static 1], Str source,
+    TokenPtrArray tokens[static 1], Tokenized out[static 1]
 ) {
-    tokenize_t t = {
+    Tokenize t = {
         .out       = out,
         .tokens    = tokens,
         .source    = source,
@@ -182,14 +180,14 @@ void tokenize(
     };
     out->tokens = t.tokens;
 
-    out->line_offsets = array(size_t, t.allocator);
+    out->line_offsets = array(i64, t.allocator);
 
-    str_buffer_t buffer = str_buffer_new(allocator, 0);
+    StrBuffer buffer = str_buffer_new(allocator, 0);
     str_buffer_reset(&buffer);
 
     array_push(out->line_offsets, 0);
     for (t.position = 0; t.position < t.source.length; t.position++) {
-        char c = str_at(t.source, t.position);
+        u8 c = str_at(t.source, t.position);
         switch (t.state) {
             case TOKENIZE_STATE_ERROR:
                 break;
@@ -253,7 +251,7 @@ void tokenize(
                         break;
                     default:
                         str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
+                            &buffer, str_new((u8*)"invalid character: '%c'"), c
                         );
                         tokenize_error(&t, str_buffer_str(&buffer));
                         break;
@@ -263,7 +261,7 @@ void tokenize(
                 switch (c) {
                     case '\'':
                         str_buffer_printf(
-                            &buffer, str_new("expected character")
+                            &buffer, str_new((u8*)"expected character")
                         );
                         tokenize_error(&t, str_buffer_str(&buffer));
                         break;
@@ -284,7 +282,7 @@ void tokenize(
                         break;
                     default:
                         str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
+                            &buffer, str_new((u8*)"invalid character: '%c'"), c
                         );
                         tokenize_error(&t, str_buffer_str(&buffer));
                         break;
@@ -326,7 +324,7 @@ void tokenize(
                         break;
                     default:
                         str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
+                            &buffer, str_new((u8*)"invalid character: '%c'"), c
                         );
                         tokenize_error(&t, str_buffer_str(&buffer));
                         break;
@@ -371,7 +369,7 @@ void tokenize(
                         break;
                     default:
                         str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
+                            &buffer, str_new((u8*)"invalid character: '%c'"), c
                         );
                         tokenize_error(&t, str_buffer_str(&buffer));
                         break;
@@ -410,17 +408,17 @@ void tokenize(
         case TOKENIZE_STATE_CHAR:
         case TOKENIZE_STATE_CHAR_END:
             str_buffer_printf(
-                &buffer, str_new("unterminated character literal")
+                &buffer, str_new((u8*)"unterminated character literal")
             );
             tokenize_error(&t, str_buffer_str(&buffer));
             break;
         case TOKENIZE_STATE_STRING_ESCAPE:
             if (t.current_token->type == TOKEN_STRING_LITERAL) {
-                str_buffer_printf(&buffer, str_new("unterminated string"));
+                str_buffer_printf(&buffer, str_new((u8*)"unterminated string"));
                 tokenize_error(&t, str_buffer_str(&buffer));
             } else if (t.current_token->type == TOKEN_CHAR_LITERAL) {
                 str_buffer_printf(
-                    &buffer, str_new("unterminated character literal")
+                    &buffer, str_new((u8*)"unterminated character literal")
                 );
                 tokenize_error(&t, str_buffer_str(&buffer));
             } else {
@@ -428,7 +426,7 @@ void tokenize(
             }
             break;
         case TOKENIZE_STATE_STRING:
-            str_buffer_printf(&buffer, str_new("unterminated string"));
+            str_buffer_printf(&buffer, str_new((u8*)"unterminated string"));
             tokenize_error(&t, str_buffer_str(&buffer));
             break;
         case TOKENIZE_STATE_IDENTIFIER:
@@ -441,7 +439,7 @@ void tokenize(
 
     if (t.state != TOKENIZE_STATE_ERROR) {
         if (array_header(*t.tokens)->length > 0) {
-            token_t* last_token = array_last(*t.tokens);
+            Token* last_token = array_last(*t.tokens);
             t.line              = last_token->start_line;
             t.column            = last_token->start_column;
             t.position          = last_token->start_position;
@@ -454,47 +452,47 @@ void tokenize(
     }
 }
 
-char* token_name(token_type_e type) {
+u8* token_name(TokenType type) {
     switch (type) {
         case TOKEN_INT:
-            return "Integer";
+            return (u8*)"Integer";
         case TOKEN_STRING_LITERAL:
-            return "StringLiteral";
+            return (u8*)"StringLiteral";
         case TOKEN_IDENTIFIER:
-            return "Identifier";
+            return (u8*)"Identifier";
         case TOKEN_EOF:
-            return "EOF";
+            return (u8*)"EOF";
         case TOKEN_ASSIGN:
-            return "=";
+            return (u8*)"=";
         case TOKEN_SEMICOLON:
-            return ";";
+            return (u8*)";";
         case TOKEN_DOT:
-            return ".";
+            return (u8*)".";
         case TOKEN_DOT_DOT:
-            return "..";
+            return (u8*)"..";
         case TOKEN_DOT_DOT_DOT:
-            return "...";
+            return (u8*)"...";
         case TOKEN_COMMA:
-            return ",";
+            return (u8*)",";
         case TOKEN_OPEN_BRACE:
-            return "{";
+            return (u8*)"{";
         case TOKEN_CLOSE_BRACE:
-            return "}";
+            return (u8*)"}";
         case TOKEN_OPEN_PAREN:
-            return "(";
+            return (u8*)"(";
         case TOKEN_CLOSE_PAREN:
-            return ")";
+            return (u8*)")";
         case TOKEN_GREATER_THAN:
-            return ">";
+            return (u8*)">";
         case TOKEN_CHAR_LITERAL:
-            return "CharLiteral";
+            return (u8*)"CharLiteral";
     }
-    return "(invalid token)";
+    return (u8*)"(invalid token)";
 }
 
-void print_tokens(str_t source, token_t** tokens) {
-    for (size_t i = 0; i < array_header(tokens)->length; ++i) {
-        token_t* token = tokens[i];
+void print_tokens(Str source, Token** tokens) {
+    for (i64 i = 0; i < array_header(tokens)->length; ++i) {
+        Token* token = tokens[i];
         printf("%ld %s ", i, token_name(token->type));
         if (token->start_position != __SIZE_MAX__) {
             fwrite(

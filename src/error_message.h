@@ -7,32 +7,32 @@ typedef enum {
     ERROR_COLOR_AUTO,
     ERROR_COLOR_OFF,
     ERROR_COLOR_ON
-} error_color_e;
+} ErrorColor;
 
-typedef struct error_message_t error_message_t;
-struct error_message_t {
-    size_t const line_start;
-    size_t const column_start;
-    str_t const message;
-    str_t const path;
-    str_t line_buffer;
-    error_message_t** notes;
+typedef struct ErrorMessage ErrorMessage;
+struct ErrorMessage {
+    i64 const line_start;
+    i64 const column_start;
+    Str const message;
+    Str const path;
+    Str line_buffer;
+    ErrorMessage** notes;
 };
 
 void print_error_message(
-    error_message_t error_message[static 1], error_color_e color
+    ErrorMessage error_message[static 1], ErrorColor color
 );
 
 void error_message_add_note(
-    error_message_t parent[static 1], error_message_t note[static 1]
+    ErrorMessage parent[static 1], ErrorMessage note[static 1]
 );
 
-error_message_t error_message_create_with_offset(
-    allocator_t allocator[static 1], str_t path, size_t line, size_t column,
-    size_t offset, str_t source, str_t message
+ErrorMessage error_message_create_with_offset(
+    Allocator allocator[static 1], Str path, i64 line, i64 column,
+    i64 offset, Str source, Str message
 );
 
-error_message_t error_message_create_with_line(
-    allocator_t allocator[static 1], str_t path, size_t line, size_t column,
-    str_t source, size_t* line_offsets, str_t message
+ErrorMessage error_message_create_with_line(
+    Allocator allocator[static 1], Str path, i64 line, i64 column,
+    Str source, i64* line_offsets, Str message
 );

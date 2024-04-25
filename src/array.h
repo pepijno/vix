@@ -3,15 +3,15 @@
 #include "allocator.h"
 
 typedef struct {
-    size_t item_size;
-    size_t length;
-    size_t capacity;
-    allocator_t* allocator;
+    i64 item_size;
+    i64 length;
+    i64 capacity;
+    Allocator* allocator;
 } array_header_t;
 
-static void* array_init(allocator_t* allocator, size_t item_size) {
+static void* array_init(Allocator* allocator, i64 item_size) {
     void* ptr   = 0;
-    size_t size = 4 * item_size + sizeof(array_header_t);
+    i64 size = 4 * item_size + sizeof(array_header_t);
     array_header_t* header =
         (array_header_t*) allocator->allocate(size, allocator->context);
 
@@ -32,15 +32,13 @@ static void* array_init(allocator_t* allocator, size_t item_size) {
 
 #define array_capacity(array) ((array) ? array_header(array)->capacity : 0)
 #define array_length(array) \
-    ((array) ? (ptrdiff_t) array_header(array)->length : (ptrdiff_t) 0)
-#define array_length_unsigned(array) \
-    ((array) ? array_header(array)->length : (size_t) 0)
+    ((array) ? (size) array_header(array)->length : (size) 0)
 
-static void* array_grow(void* array, size_t add_length, size_t capacity) {
+static void* array_grow(void* array, i64 add_length, i64 capacity) {
     array_header_t* header = array_header(array);
-    size_t minimum_length  = header->length + add_length;
+    i64 minimum_length  = header->length + add_length;
 
-    size_t minimum_capacity = capacity;
+    i64 minimum_capacity = capacity;
     // compute the minimum capacity needed
     if (minimum_length > minimum_capacity) {
         minimum_capacity = minimum_length;
@@ -57,9 +55,9 @@ static void* array_grow(void* array, size_t add_length, size_t capacity) {
         minimum_capacity = 4;
     }
 
-    size_t item_size = (array) ? header->item_size : 0;
-    size_t size      = item_size * minimum_capacity + sizeof(*header);
-    size_t old_size  = sizeof(*header) + header->length * header->item_size;
+    i64 item_size = (array) ? header->item_size : 0;
+    i64 size      = item_size * minimum_capacity + sizeof(*header);
+    i64 old_size  = sizeof(*header) + header->length * header->item_size;
 
     array_header_t* new_header =
         (array_header_t*) header->allocator->reallocate(

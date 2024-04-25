@@ -4,40 +4,40 @@
 #include "util.h"
 
 typedef struct {
-    size_t const indent;
+    i64 const indent;
     FILE* const f;
-} ast_print_t;
+} AstPrint;
 
-static char* node_type_string(node_type_e type) {
+static u8* node_type_string(NodeType type) {
     switch (type) {
         case NODE_TYPE_STRING_LITERAL:
-            return "StringLiteral";
+            return (u8*)"StringLiteral";
         case NODE_TYPE_CHAR_LITERAL:
-            return "CharLiteral";
+            return (u8*)"CharLiteral";
         case NODE_TYPE_INTEGER:
-            return "Integer";
+            return (u8*)"Integer";
         case NODE_TYPE_OBJECT:
-            return "Object";
+            return (u8*)"Object";
         case NODE_TYPE_PROPERTY:
-            return "Property";
+            return (u8*)"Property";
         case NODE_TYPE_IDENTIFIER:
-            return "Identifier";
+            return (u8*)"Identifier";
         case NODE_TYPE_FREE_OBJECT_COPY_PARAMS:
-            return "FreeObjectCopyParams";
+            return (u8*)"FreeObjectCopyParams";
         case NODE_TYPE_OBJECT_COPY:
-            return "ObjectCopy";
+            return (u8*)"ObjectCopy";
         case NODE_TYPE_DECORATOR:
-            return "Decorator";
+            return (u8*)"Decorator";
         case NODE_TYPE_ROOT:
-            return "Root";
+            return (u8*)"Root";
     }
     vix_unreachable();
 }
 
-static void ast_print_visit(ast_node_t* node, void* context) {
-    ast_print_t* ast_print = (ast_print_t*) context;
+static void ast_print_visit(AstNode* node, void* context) {
+    AstPrint* ast_print = (AstPrint*) context;
 
-    for (size_t i = 0; i < ast_print->indent; ++i) {
+    for (i64 i = 0; i < ast_print->indent; ++i) {
         fprintf(ast_print->f, " ");
     }
 
@@ -62,14 +62,14 @@ static void ast_print_visit(ast_node_t* node, void* context) {
     }
     fprintf(ast_print->f, "\n");
 
-    ast_print_t new_ast_print = {
+    AstPrint new_ast_print = {
         .f      = ast_print->f,
         .indent = ast_print->indent + 2
     };
     ast_visit_node_children(node, ast_print_visit, &new_ast_print);
 }
 
-void ast_print(FILE* f, ast_node_t* node, size_t indent) {
-    ast_print_t ast_print = {.f = f, .indent = indent};
+void ast_print(FILE* f, AstNode* node, i64 indent) {
+    AstPrint ast_print = {.f = f, .indent = indent};
     ast_visit_node_children(node, ast_print_visit, &ast_print);
 }

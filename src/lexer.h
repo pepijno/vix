@@ -20,51 +20,51 @@ typedef enum {
     TOKEN_SEMICOLON,
     TOKEN_INT,
     TOKEN_EOF
-} token_type_e;
+} TokenType;
 
 typedef struct {
-    str_t identifier;
-} token_identifier_t;
+    Str identifier;
+} TokenIdentifier;
 
 typedef struct {
-    str_t string;
-} token_string_t;
+    Str string;
+} TokenString;
 
 typedef struct {
-    char c;
-} token_char_t;
+    u8 c;
+} TokenChar;
 
 typedef struct {
-    str_t integer;
-} token_integer_t;
+    Str integer;
+} TokenInteger;
 
 typedef struct {
-    token_type_e type;
-    size_t start_position;
-    size_t end_position;
-    size_t start_line;
-    size_t start_column;
+    TokenType type;
+    i64 start_position;
+    i64 end_position;
+    i64 start_line;
+    i64 start_column;
     union {
-        token_string_t string_literal;
-        token_identifier_t identifier;
-        token_char_t char_literal;
-        token_integer_t integer;
+        TokenString string_literal;
+        TokenIdentifier identifier;
+        TokenChar char_literal;
+        TokenInteger integer;
     } data;
-} token_t;
+} Token;
 
-typedef token_t** token_ptr_array_t;
+typedef Token** TokenPtrArray;
 typedef struct {
-    token_ptr_array_t* tokens;
-    size_t* line_offsets;
+    TokenPtrArray* tokens;
+    i64* line_offsets;
 
-    str_t error;
-    size_t error_line;
-    size_t error_column;
-} tokenized_t;
+    Str error;
+    i64 error_line;
+    i64 error_column;
+} Tokenized;
 
 void tokenize(
-    allocator_t allocator[static 1], str_t source,
-    token_ptr_array_t tokens[static 1], tokenized_t out[static 1]
+    Allocator allocator[static 1], Str source,
+    TokenPtrArray tokens[static 1], Tokenized out[static 1]
 );
-char * token_name(token_type_e type);
-void print_tokens(str_t source, token_ptr_array_t tokens);
+u8* token_name(TokenType type);
+void print_tokens(Str source, TokenPtrArray tokens);

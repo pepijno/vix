@@ -1,42 +1,44 @@
 #pragma once
 
 #include "allocator.h"
+#include "defs.h"
 #include "util.h"
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
-typedef struct str_t {
-    char data[256];
-    size_t length;
-} str_t;
+typedef struct {
+    u8 data[256];
+    i64 length;
+} Str;
 
 #define str_fmt     "%.*s"
-#define str_args(s) (int) (s).length, (s).data
+#define str_args(s) (i32)(s).length, (s).data
 
-static inline char str_at(str_t str, size_t index) {
+static inline u8 str_at(Str str, i64 index) {
     return str.data[index];
 }
 
-static inline str_t str_new_length(char* str, size_t length) {
+static inline Str str_new_length(u8* str, i64 length) {
     assert(length <= 256);
-    str_t s = (str_t){
+    Str s = (Str){
         .length = length,
     };
     memcpy(s.data, str, length);
     return s;
 }
 
-static inline str_t str_new_empty() {
+static inline Str str_new_empty() {
     return str_new_length(nullptr, 0);
 }
 
-static inline str_t str_new(char* string) {
-    return str_new_length(string, strlen(string));
+static inline Str str_new(u8* string) {
+    return str_new_length(string, strlen((char*)string));
 }
 
-static inline bool str_equal(str_t str1, str_t str2) {
+static inline bool str_equal(Str str1, Str str2) {
     if (str1.length != str2.length) {
         return false;
     }
@@ -46,26 +48,26 @@ static inline bool str_equal(str_t str1, str_t str2) {
     return memcmp(str1.data, str2.data, str1.length) == 0;
 }
 
-typedef struct str_buffer_t {
-    char* data;
-    size_t length;
-    size_t capacity;
-    allocator_t* allocator;
-} str_buffer_t;
+typedef struct {
+    u8* data;
+    i64 length;
+    i64 capacity;
+    Allocator* allocator;
+} StrBuffer;
 
 static void str_buffer_ensure_capacity(
-    str_buffer_t str_buffer[static 1], size_t add_length
+    StrBuffer str_buffer[static 1], i64 add_length
 ) {
-    size_t available = str_buffer->capacity - str_buffer->length;
+    i64 available = str_buffer->capacity - str_buffer->length;
     if (available >= add_length) {
         return;
     }
-    size_t length          = str_buffer->length;
-    size_t required_length = length + add_length;
-    size_t new_length      = 2 * required_length;
-    allocator_t* allocator = str_buffer->allocator;
+    i64 length             = str_buffer->length;
+    i64 required_length    = length + add_length;
+    i64 new_length         = 2 * required_length;
+    Allocator* allocator = str_buffer->allocator;
     void* new_data         = allocator->reallocate(
-        str_buffer->data, sizeof(char) * length, sizeof(char) * new_length,
+        str_buffer->data, sizeof(u8) * length, sizeof(u8) * new_length,
         allocator->context
     );
     if (!new_data) {
@@ -76,10 +78,10 @@ static void str_buffer_ensure_capacity(
     str_buffer->capacity = new_length;
 }
 
-static str_buffer_t str_buffer_new(
-    allocator_t allocator[static 1], size_t capacity
+static StrBuffer str_buffer_new(
+    Allocator allocator[static 1], i64 capacity
 ) {
-    str_buffer_t buffer = {
+    StrBuffer buffer = {
         .data      = nullptr,
         .length    = 0,
         .capacity  = 0,
@@ -89,45 +91,46 @@ static str_buffer_t str_buffer_new(
     return buffer;
 }
 
-static void str_buffer_reset(str_buffer_t str_buffer[static 1]) {
+static void str_buffer_reset(StrBuffer str_buffer[static 1]) {
     str_buffer->length   = 0;
     str_buffer->capacity = 0;
 }
 
-static str_t str_buffer_str(str_buffer_t str_buffer[static 1]) {
-    str_t str = (str_t){
+static Str str_buffer_str(StrBuffer str_buffer[static 1]) {
+    Str str = (Str){
         .length = str_buffer->length,
     };
     memcpy(str.data, str_buffer->data, str_buffer->length);
     return str;
 }
 
-static void str_buffer_append_char(str_buffer_t str_buffer[static 1], char c) {
+static void str_buffer_append_char(StrBuffer str_buffer[static 1], u8 c) {
     str_buffer_ensure_capacity(str_buffer, 1);
     str_buffer->data[str_buffer->length] = c;
     str_buffer->length += 1;
 }
 
-static void str_buffer_append(str_buffer_t str_buffer[static 1], str_t str) {
+static void str_buffer_append(StrBuffer str_buffer[static 1], Str str) {
     str_buffer_ensure_capacity(str_buffer, str.length);
     memcpy(str_buffer->data + str_buffer->length, str.data, str.length);
     str_buffer->length += str.length;
 }
 
-static int str_buffer_vprintf(
-    str_buffer_t buffer[static 1], str_t format, va_list ap
+static i32 str_buffer_vprintf(
+    StrBuffer buffer[static 1], Str format, va_list ap
 ) {
     str_buffer_reset(buffer);
 
     va_list ap2;
     va_copy(ap2, ap);
 
-    int length1 = vsnprintf(nullptr, 0, format.data, ap);
+    i32 length1 = vsnprintf(nullptr, 0, (char*) format.data, ap);
     assert(length1 >= 0);
 
     str_buffer_ensure_capacity(buffer, length1);
 
-    int length2 = vsnprintf(buffer->data, length1 + 1, format.data, ap2);
+    i32 length2 =
+        vsnprintf((char*) buffer->data, length1 + 1, (char*) format.data, ap2);
     assert(length1 == length2);
 
     va_end(ap2);
@@ -137,27 +140,29 @@ static int str_buffer_vprintf(
     return length1;
 }
 
-static int str_buffer_printf(str_buffer_t buffer[static 1], str_t format, ...) {
+static i32 str_buffer_printf(StrBuffer buffer[static 1], Str format, ...) {
     va_list ap;
     va_start(ap, format);
-    int length = str_buffer_vprintf(buffer, format, ap);
+    i32 length = str_buffer_vprintf(buffer, format, ap);
     va_end(ap);
     return length;
 }
 
-static int str_buffer_append_vprintf(
-    str_buffer_t buffer[static 1], str_t format, va_list ap
+static i32 str_buffer_append_vprintf(
+    StrBuffer buffer[static 1], Str format, va_list ap
 ) {
     va_list ap2;
     va_copy(ap2, ap);
 
-    int length1 = vsnprintf(nullptr, 0, format.data, ap);
+    i32 length1 = vsnprintf(nullptr, 0, (char*) format.data, ap);
     assert(length1 >= 0);
 
     str_buffer_ensure_capacity(buffer, length1);
 
-    int length2 =
-        vsnprintf(buffer->data + buffer->length, length1 + 1, format.data, ap2);
+    i32 length2 = vsnprintf(
+        (char*) buffer->data + buffer->length, length1 + 1, (char*) format.data,
+        ap2
+    );
     assert(length1 == length2);
 
     va_end(ap2);
@@ -168,12 +173,12 @@ static int str_buffer_append_vprintf(
 }
 
 // __attribute__((format(printf, 2, 3)))
-static int str_buffer_append_printf(
-    str_buffer_t buffer[static 1], str_t format, ...
+static i32 str_buffer_append_printf(
+    StrBuffer buffer[static 1], Str format, ...
 ) {
     va_list ap;
     va_start(ap, format);
-    int length = str_buffer_append_vprintf(buffer, format, ap);
+    i32 length = str_buffer_append_vprintf(buffer, format, ap);
     va_end(ap);
     return length;
 }
