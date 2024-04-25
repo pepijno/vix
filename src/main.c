@@ -106,7 +106,9 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    arena_t arena         = {};
+    const int arena_buffer_size = 1024 * 1024 * 16;
+    void* arena_buffer = malloc(arena_buffer_size);
+    arena_t arena         = arena_init(arena_buffer, arena_buffer_size);
     allocator_t allocator = init_arena_allocator(&arena);
 
     str_t path   = str_new(argv[1]);
@@ -168,7 +170,6 @@ int main(int argc, char* argv[]) {
 
     system("gcc -O2 -Wall -Wextra -o vix vix.c");
 
-    arena_reset(&arena);
     arena_free(&arena);
 
     return 0;
