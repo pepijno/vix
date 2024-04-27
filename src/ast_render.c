@@ -8,28 +8,28 @@ typedef struct {
     FILE* const f;
 } AstPrint;
 
-static u8* node_type_string(NodeType type) {
+static Str node_type_string(NodeType type) {
     switch (type) {
         case NODE_TYPE_STRING_LITERAL:
-            return (u8*)"StringLiteral";
+            return str_new("StringLiteral");
         case NODE_TYPE_CHAR_LITERAL:
-            return (u8*)"CharLiteral";
+            return str_new("CharLiteral");
         case NODE_TYPE_INTEGER:
-            return (u8*)"Integer";
+            return str_new("Integer");
         case NODE_TYPE_OBJECT:
-            return (u8*)"Object";
+            return str_new("Object");
         case NODE_TYPE_PROPERTY:
-            return (u8*)"Property";
+            return str_new("Property");
         case NODE_TYPE_IDENTIFIER:
-            return (u8*)"Identifier";
+            return str_new("Identifier");
         case NODE_TYPE_FREE_OBJECT_COPY_PARAMS:
-            return (u8*)"FreeObjectCopyParams";
+            return str_new("FreeObjectCopyParams");
         case NODE_TYPE_OBJECT_COPY:
-            return (u8*)"ObjectCopy";
+            return str_new("ObjectCopy");
         case NODE_TYPE_DECORATOR:
-            return (u8*)"Decorator";
+            return str_new("Decorator");
         case NODE_TYPE_ROOT:
-            return (u8*)"Root";
+            return str_new("Root");
     }
     vix_unreachable();
 }
@@ -41,23 +41,24 @@ static void ast_print_visit(AstNode* node, void* context) {
         fprintf(ast_print->f, " ");
     }
 
-    fprintf(ast_print->f, "%ld %s ", node->id, node_type_string(node->type));
+    fprintf(
+        ast_print->f, "%ld " str_fmt " ", node->id,
+        str_args(node_type_string(node->type))
+    );
     if (node->type == NODE_TYPE_IDENTIFIER) {
         fprintf(
-            ast_print->f, "\"" str_fmt "\"",
-            str_args(node->data.identifier.content)
+            ast_print->f, "\"" str_fmt "\"", str_args(node->identifier.content)
         );
     } else if (node->type == NODE_TYPE_STRING_LITERAL) {
         fprintf(
             ast_print->f, "\"" str_fmt "\"",
-            str_args(node->data.string_literal.content)
+            str_args(node->string_literal.content)
         );
     } else if (node->type == NODE_TYPE_CHAR_LITERAL) {
-        fprintf(ast_print->f, "'%c'", node->data.char_literal.c);
+        fprintf(ast_print->f, "'%c'", node->char_literal.c);
     } else if (node->type == NODE_TYPE_INTEGER) {
         fprintf(
-            ast_print->f, "\"" str_fmt "\"",
-            str_args(node->data.integer.content)
+            ast_print->f, "\"" str_fmt "\"", str_args(node->integer.content)
         );
     }
     fprintf(ast_print->f, "\n");

@@ -3,22 +3,18 @@
 #include "array.h"
 #include "ast_render.h"
 #include "error_message.h"
+#include "generator.h"
 #include "lexer.h"
 #include "parser.h"
 #include "util.h"
 
 #include <assert.h>
-#include <llvm-c/Analysis.h>
-#include <llvm-c/BitWriter.h>
-#include <llvm-c/Core.h>
-#include <llvm-c/ExecutionEngine.h>
-#include <llvm-c/Target.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 static Str os_fetch_file(Allocator allocator[static 1], FILE f[static 1]) {
     static size_t buffer_size   = 0x2000;
-    StrBuffer buffer         = str_buffer_new(allocator, buffer_size);
+    StrBuffer buffer            = str_buffer_new(allocator, buffer_size);
     size_t actual_buffer_length = 0;
     while (true) {
         size_t amt_read = fread(
@@ -40,85 +36,24 @@ static Str os_fetch_file(Allocator allocator[static 1], FILE f[static 1]) {
 }
 
 int main(int argc, char* argv[]) {
-    // // Initialize LLVM context and module
-    // LLVMContextRef context = LLVMContextCreate();
-    // LLVMModuleRef module = LLVMModuleCreateWithName("example");
-    //
-    // // Define the printf function signature: int32 (i8*, ...)
-    // LLVMTypeRef int32Type = LLVMInt32TypeInContext(context);
-    // LLVMTypeRef int8PtrType = LLVMPointerType(LLVMInt8TypeInContext(context),
-    // 0); LLVMTypeRef printfFuncType = LLVMFunctionType(int32Type,
-    // &int8PtrType, 1, 1);
-    //
-    // // Declare the printf function
-    // LLVMValueRef printfFunc = LLVMAddFunction(module, "printf",
-    // printfFuncType); LLVMSetFunctionCallConv(printfFunc, LLVMCCallConv);
-    //
-    // // Define the function type: void (i8*)
-    // LLVMTypeRef voidType = LLVMVoidTypeInContext(context);
-    // LLVMTypeRef printFuncParamTypes[] = { int8PtrType };
-    // LLVMTypeRef printFuncType = LLVMFunctionType(voidType,
-    // printFuncParamTypes, 1, 0);
-    //
-    // // Create the function named 'printString'
-    // LLVMValueRef printStringFunc = LLVMAddFunction(module, "printString",
-    // printFuncType); LLVMSetFunctionCallConv(printStringFunc, LLVMCCallConv);
-    //
-    // // Create a basic block
-    // LLVMBasicBlockRef entryBlock = LLVMAppendBasicBlockInContext(context,
-    // printStringFunc, "entry"); LLVMBuilderRef builder =
-    // LLVMCreateBuilderInContext(context); LLVMPositionBuilderAtEnd(builder,
-    // entryBlock);
-    //
-    // // Get function parameter
-    // LLVMValueRef strParam = LLVMGetParam(printStringFunc, 0);
-    //
-    // // Call printf function to print the string
-    // LLVMValueRef formatString = LLVMBuildGlobalStringPtr(builder, "%s\n",
-    // ""); LLVMValueRef args[] = { formatString, strParam }; LLVMValueRef
-    // callResult = LLVMBuildCall2(builder, voidType, printfFunc, args, 2, "");
-    //
-    // // Check if the call result is not null (error checking)
-    // LLVMBasicBlockRef exitBlock = LLVMAppendBasicBlockInContext(context,
-    // printStringFunc, "exit"); LLVMBasicBlockRef continueBlock =
-    // LLVMAppendBasicBlockInContext(context, printStringFunc, "continue");
-    // LLVMValueRef zero = LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0);
-    // LLVMValueRef comparison = LLVMBuildICmp(builder, LLVMIntNE, callResult,
-    // zero, "cmp"); LLVMBuildCondBr(builder, comparison, exitBlock,
-    // continueBlock); LLVMPositionBuilderAtEnd(builder, exitBlock);
-    // LLVMBuildRetVoid(builder);
-    // LLVMPositionBuilderAtEnd(builder, continueBlock);
-    //
-    // // Return void
-    // LLVMBuildRetVoid(builder);
-    //
-    // // Print out the LLVM IR
-    // char *irString = LLVMPrintModuleToString(module);
-    // printf("%s\n", irString);
-    //
-    // // Clean up
-    // LLVMDisposeMessage(irString);
-    // LLVMDisposeBuilder(builder);
-    // LLVMDisposeModule(module);
-    // LLVMContextDispose(context);
     if (argc < 2) {
         printf("Please provide a *.vix file to compile");
         exit(1);
     }
 
-    const int arena_buffer_size = 1024 * 1024 * 16;
-    void* arena_buffer = malloc(arena_buffer_size);
-    Arena arena         = arena_init(arena_buffer, arena_buffer_size);
-    Allocator allocator = init_arena_allocator(&arena);
+    int const arena_buffer_size = 1024 * 1024 * 16;
+    void* arena_buffer          = malloc(arena_buffer_size);
+    Arena arena                 = arena_init(arena_buffer, arena_buffer_size);
+    Allocator allocator         = init_arena_allocator(&arena);
 
-    Str path   = str_new((u8*)argv[1]);
-    FILE* f      = fopen((char*)path.data, "rb");
+    Str path   = str_new(argv[1]);
+    FILE* f    = fopen((char*) path.data, "rb");
     Str source = os_fetch_file(&allocator, f);
     fclose(f);
 
     TokenPtrArray tokens = array(Token*, &allocator);
-    Tokenized tokenized    = {};
-    tokenized.error          = str_new_empty();
+    Tokenized tokenized  = {};
+    tokenized.error      = str_new_empty();
     tokenize(&allocator, source, &tokens, &tokenized);
 
     if (tokenized.error.length != 0) {
@@ -145,7 +80,7 @@ int main(int argc, char* argv[]) {
 
     ast_print(stdout, import_entry.root, 0);
 
-    CodeGen code_gen = {
+    Analyzer analyzer = {
         .error_color = ERROR_COLOR_ON,
         .allocator   = &allocator,
         .root_scope =
@@ -154,12 +89,21 @@ int main(int argc, char* argv[]) {
                          .source_node = import_entry.root,
                          },
     };
-    code_gen.errors                = array(ErrorMessage*, &allocator);
-    code_gen.root_scope.properties = array(AstNode*, &allocator);
-    code_gen.data_strings          = array(StringData, &allocator);
+    analyzer.errors                = array(ErrorMessage*, &allocator);
+    analyzer.root_scope.properties = array(AstNode*, &allocator);
 
-    StrBuffer buffer = str_buffer_new(&allocator, 0);
-    analyse(&code_gen, import_entry.root);
+    analyse(&analyzer, import_entry.root);
+
+    CodeGen code_gen = {
+        .allocator = &allocator,
+        .root_scope =
+            {
+                         .parent      = nullptr,
+                         .source_node = import_entry.root,
+                         },
+    };
+    code_gen.data_strings = array(StringData, &allocator);
+    StrBuffer buffer      = str_buffer_new(&allocator, 0);
     generate(&code_gen, &buffer, import_entry.root);
 
     FILE* temp = fopen("vix.c", "w");

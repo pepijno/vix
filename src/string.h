@@ -10,8 +10,8 @@
 #include <string.h>
 
 typedef struct {
-    u8 data[256];
     i64 length;
+    u8 data[256];
 } Str;
 
 #define str_fmt     "%.*s"
@@ -21,7 +21,15 @@ static inline u8 str_at(Str str, i64 index) {
     return str.data[index];
 }
 
-static inline Str str_new_length(u8* str, i64 length) {
+static inline Str _str_new_length_u8(u8* str, i64 length) {
+    assert(length <= 256);
+    Str s = (Str){
+        .length = length,
+    };
+    memcpy(s.data, str, length);
+    return s;
+}
+static inline Str _str_new_length_char(char* str, i64 length) {
     assert(length <= 256);
     Str s = (Str){
         .length = length,
@@ -30,13 +38,25 @@ static inline Str str_new_length(u8* str, i64 length) {
     return s;
 }
 
+#define str_new_length(str, length)                                            \
+    _Generic((str), char*: _str_new_length_char, default: _str_new_length_u8)( \
+        str, length                                                            \
+    )
+
 static inline Str str_new_empty() {
     return str_new_length(nullptr, 0);
 }
 
-static inline Str str_new(u8* string) {
-    return str_new_length(string, strlen((char*)string));
+static inline Str _str_new_u8(u8* string) {
+    return str_new_length(string, strlen((char*) string));
 }
+
+static inline Str _str_new_char(char* string) {
+    return str_new_length(string, strlen((char*) string));
+}
+
+#define str_new(str) \
+    _Generic((str), char*: _str_new_char, default: _str_new_u8)(str)
 
 static inline bool str_equal(Str str1, Str str2) {
     if (str1.length != str2.length) {
@@ -62,11 +82,11 @@ static void str_buffer_ensure_capacity(
     if (available >= add_length) {
         return;
     }
-    i64 length             = str_buffer->length;
-    i64 required_length    = length + add_length;
-    i64 new_length         = 2 * required_length;
+    i64 length           = str_buffer->length;
+    i64 required_length  = length + add_length;
+    i64 new_length       = 2 * required_length;
     Allocator* allocator = str_buffer->allocator;
-    void* new_data         = allocator->reallocate(
+    void* new_data       = allocator->reallocate(
         str_buffer->data, sizeof(u8) * length, sizeof(u8) * new_length,
         allocator->context
     );
@@ -78,9 +98,7 @@ static void str_buffer_ensure_capacity(
     str_buffer->capacity = new_length;
 }
 
-static StrBuffer str_buffer_new(
-    Allocator allocator[static 1], i64 capacity
-) {
+static StrBuffer str_buffer_new(Allocator allocator[static 1], i64 capacity) {
     StrBuffer buffer = {
         .data      = nullptr,
         .length    = 0,

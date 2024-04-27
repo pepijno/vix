@@ -89,7 +89,7 @@ struct AstNode {
         AstFreeObjectCopyParams free_object_copy_params;
         AstDecorator decorator;
         AstRoot root;
-    } data;
+    };
 };
 
 void ast_visit_node_children(

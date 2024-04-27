@@ -18,8 +18,7 @@ typedef struct {
 } ParseContext;
 
 static void ast_error(
-    ParseContext parse_context[static 1], Token token[static 1],
-    Str message
+    ParseContext parse_context[static 1], Token token[static 1], Str message
 ) {
     ErrorMessage error = error_message_create_with_line(
         parse_context->allocator, parse_context->owner->path, token->start_line,
@@ -35,12 +34,11 @@ static Str token_buffer(Token token[static 1]) {
     assert(
         token->type == TOKEN_STRING_LITERAL || token->type == TOKEN_IDENTIFIER
     );
-    return token->data.string_literal.string;
+    return token->string_literal.string;
 }
 
 static void ast_expect_token(
-    ParseContext parse_context[static 1], Token token[static 1],
-    TokenType type
+    ParseContext parse_context[static 1], Token token[static 1], TokenType type
 ) {
     if (token->type == type) {
         return;
@@ -48,8 +46,8 @@ static void ast_expect_token(
 
     StrBuffer buffer = str_buffer_new(parse_context->allocator, 0);
     str_buffer_printf(
-        &buffer, str_new((u8*)"expected token '%s', found '%s'"), token_name(type),
-        token_name(token->type)
+        &buffer, str_new("expected token '%s', found '%s'"),
+        token_name(type), token_name(token->type)
     );
     ast_error(parse_context, token, str_buffer_str(&buffer));
 }
@@ -116,7 +114,7 @@ static AstNode* ast_parse_string_literal(
         *token_index += 1;
         AstNode* node =
             ast_node_create(parse_context, NODE_TYPE_STRING_LITERAL, token);
-        node->data.string_literal.content = token_buffer(token);
+        node->string_literal.content = token_buffer(token);
         return node;
     } else {
         return nullptr;
@@ -131,7 +129,7 @@ static AstNode* ast_parse_char_literal(
         *token_index += 1;
         AstNode* node =
             ast_node_create(parse_context, NODE_TYPE_CHAR_LITERAL, token);
-        node->data.char_literal.c = token->data.char_literal.c;
+        node->char_literal.c = token->char_literal.c;
         return node;
     } else {
         return nullptr;
@@ -146,7 +144,7 @@ static AstNode* ast_parse_integer_literal(
         *token_index += 1;
         AstNode* node =
             ast_node_create(parse_context, NODE_TYPE_INTEGER, token);
-        node->data.integer.content = token->data.integer.integer;
+        node->integer.content = token->integer.integer;
         return node;
     } else {
         return nullptr;
@@ -162,8 +160,8 @@ static AstNode* ast_parse_identifier(
         *token_index += 1;
         AstNode* node =
             ast_node_create(parse_context, NODE_TYPE_IDENTIFIER, token);
-        node->data.identifier.content = token_buffer(token);
-        assert(node->data.identifier.content.length != 0);
+        node->identifier.content = token_buffer(token);
+        assert(node->identifier.content.length != 0);
         return node;
     } else {
         return nullptr;
@@ -175,7 +173,7 @@ static AstNode* ast_parse_property(
     ParseContext parse_context[static 1], i64 token_index[static 1]
 ) {
     i64 original_token_index = *token_index;
-    AstNode* identifier   = ast_parse_identifier(parse_context, token_index);
+    AstNode* identifier      = ast_parse_identifier(parse_context, token_index);
     if (!identifier) {
         *token_index = original_token_index;
         return nullptr;
@@ -193,10 +191,10 @@ static AstNode* ast_parse_property(
 
     AstNode* node =
         ast_node_create(parse_context, NODE_TYPE_PROPERTY, assign_token);
-    node->data.property.identifier             = identifier;
-    node->data.property.property_value         = property_value;
-    node->data.property.identifier->parent     = node;
-    node->data.property.property_value->parent = node;
+    node->property.identifier             = identifier;
+    node->property.property_value         = property_value;
+    node->property.identifier->parent     = node;
+    node->property.property_value->parent = node;
 
     printf("index %ld\n", *token_index);
     ast_eat_token(parse_context, token_index, TOKEN_SEMICOLON);
@@ -224,8 +222,7 @@ static AstNode* ast_parse_property_value(
         return string_literal;
     }
 
-    AstNode* char_literal =
-        ast_parse_char_literal(parse_context, token_index);
+    AstNode* char_literal = ast_parse_char_literal(parse_context, token_index);
     if (char_literal) {
         return char_literal;
     }
@@ -243,7 +240,7 @@ static AstNode* ast_parse_free_object_copy_params(
     ParseContext parse_context[static 1], i64 token_index[static 1]
 ) {
     i64 original_token_index = *token_index;
-    Token* next_token      = (*parse_context->tokens)[*token_index];
+    Token* next_token        = (*parse_context->tokens)[*token_index];
 
     if (next_token->type == TOKEN_OPEN_PAREN) {
         *token_index += 1;
@@ -256,14 +253,14 @@ static AstNode* ast_parse_free_object_copy_params(
     AstNode* free_copy = ast_node_create(
         parse_context, NODE_TYPE_FREE_OBJECT_COPY_PARAMS, next_token
     );
-    free_copy->data.free_object_copy_params.parameter_list =
+    free_copy->free_object_copy_params.parameter_list =
         array(AstNode*, parse_context->allocator);
     while (true) {
         AstNode* property_value =
             ast_parse_property_value(parse_context, token_index);
         if (property_value) {
             array_push(
-                free_copy->data.free_object_copy_params.parameter_list,
+                free_copy->free_object_copy_params.parameter_list,
                 property_value
             );
             property_value->parent = free_copy;
@@ -292,7 +289,7 @@ static AstNode* ast_parse_object_copy(
     ParseContext parse_context[static 1], i64 token_index[static 1]
 ) {
     i64 original_token_index = *token_index;
-    AstNode* identifier   = ast_parse_identifier(parse_context, token_index);
+    AstNode* identifier      = ast_parse_identifier(parse_context, token_index);
     if (!identifier) {
         *token_index = original_token_index;
         return nullptr;
@@ -302,9 +299,9 @@ static AstNode* ast_parse_object_copy(
 
     AstNode* object_copy =
         ast_node_create(parse_context, NODE_TYPE_OBJECT_COPY, next_token);
-    object_copy->data.object_copy.identifier = identifier;
-    identifier->parent                       = object_copy;
-    object_copy->data.object_copy.free_object_copies =
+    object_copy->object_copy.identifier = identifier;
+    identifier->parent                  = object_copy;
+    object_copy->object_copy.free_object_copies =
         array(AstNode*, parse_context->allocator);
 
     while (true) {
@@ -313,8 +310,7 @@ static AstNode* ast_parse_object_copy(
         if (free_object_copy != nullptr) {
             free_object_copy->parent = object_copy;
             array_push(
-                object_copy->data.object_copy.free_object_copies,
-                free_object_copy
+                object_copy->object_copy.free_object_copies, free_object_copy
             );
         } else {
             break;
@@ -328,8 +324,8 @@ static AstNode* ast_parse_object_copy(
         AstNode* next_object_copy =
             ast_parse_object_copy(parse_context, token_index);
         if (next_object_copy) {
-            object_copy->data.object_copy.object_copy = next_object_copy;
-            next_object_copy->parent                  = object_copy;
+            object_copy->object_copy.object_copy = next_object_copy;
+            next_object_copy->parent             = object_copy;
         } else {
             *token_index = original_token_index;
             return nullptr;
@@ -346,12 +342,9 @@ static AstNode* ast_parse_object(
 ) {
     Token* token = (*parse_context->tokens)[*token_index];
 
-    AstNode* object =
-        ast_node_create(parse_context, NODE_TYPE_OBJECT, token);
-    object->data.object.free_list =
-        array(AstNode*, parse_context->allocator);
-    object->data.object.property_list =
-        array(AstNode*, parse_context->allocator);
+    AstNode* object = ast_node_create(parse_context, NODE_TYPE_OBJECT, token);
+    object->object.free_list     = array(AstNode*, parse_context->allocator);
+    object->object.property_list = array(AstNode*, parse_context->allocator);
 
     i64 original_token_index = *token_index;
 
@@ -360,7 +353,7 @@ static AstNode* ast_parse_object(
             AstNode* identifier =
                 ast_parse_identifier(parse_context, token_index);
             if (identifier) {
-                array_push(object->data.object.free_list, identifier);
+                array_push(object->object.free_list, identifier);
                 identifier->parent = object;
                 continue;
             }
@@ -384,15 +377,14 @@ static AstNode* ast_parse_object(
             AstNode* decorator =
                 ast_parse_decorator(parse_context, token_index);
             if (decorator) {
-                array_push(object->data.object.property_list, decorator);
+                array_push(object->object.property_list, decorator);
                 decorator->parent = object;
                 continue;
             }
 
-            AstNode* property =
-                ast_parse_property(parse_context, token_index);
+            AstNode* property = ast_parse_property(parse_context, token_index);
             if (property) {
-                array_push(object->data.object.property_list, property);
+                array_push(object->object.property_list, property);
                 property->parent = object;
                 continue;
             }
@@ -410,8 +402,8 @@ static AstNode* ast_parse_object(
         AstNode* object_copy =
             ast_parse_object_copy(parse_context, token_index);
         if (object_copy != nullptr) {
-            object->data.object_copy.object_copy = object_copy;
-            object_copy->parent                  = object;
+            object->object_copy.object_copy = object_copy;
+            object_copy->parent             = object;
             return object;
         } else {
             *token_index = original_token_index;
@@ -426,7 +418,7 @@ static AstNode* ast_parse_object(
 static AstNode* ast_parse_decorator(
     ParseContext parse_context[static 1], i64 token_index[static 1]
 ) {
-    Token* token           = (*parse_context->tokens)[*token_index];
+    Token* token             = (*parse_context->tokens)[*token_index];
     i64 original_token_index = *token_index;
     if (token->type == TOKEN_DOT_DOT_DOT) {
         *token_index += 1;
@@ -435,8 +427,8 @@ static AstNode* ast_parse_decorator(
         AstNode* node =
             ast_node_create(parse_context, NODE_TYPE_DECORATOR, token);
         if (property_value) {
-            node->data.decorator.object = property_value;
-            property_value->parent      = node;
+            node->decorator.object = property_value;
+            property_value->parent = node;
         } else {
             *token_index = original_token_index;
             return nullptr;
@@ -456,13 +448,12 @@ static AstNode* ast_parse_root(
     AstNode* node = ast_node_create(
         parse_context, NODE_TYPE_ROOT, (*parse_context->tokens)[*token_index]
     );
-    node->data.root.list = array(AstNode*, parse_context->allocator);
+    node->root.list = array(AstNode*, parse_context->allocator);
 
     while (true) {
-        AstNode* property_node =
-            ast_parse_property(parse_context, token_index);
+        AstNode* property_node = ast_parse_property(parse_context, token_index);
         if (property_node) {
-            array_push(node->data.root.list, property_node);
+            array_push(node->root.list, property_node);
             property_node->parent = node;
             continue;
         }
@@ -474,9 +465,8 @@ static AstNode* ast_parse_root(
 }
 
 AstNode* ast_parse(
-    Allocator allocator[static 1], Str source,
-    TokenPtrArray tokens[static 1], ImportTableEntry owner[static 1],
-    ErrorColor error_color
+    Allocator allocator[static 1], Str source, TokenPtrArray tokens[static 1],
+    ImportTableEntry owner[static 1], ErrorColor error_color
 ) {
     ParseContext parse_context = {
         .id          = 0,
@@ -515,31 +505,30 @@ void ast_visit_node_children(
 ) {
     switch (node->type) {
         case NODE_TYPE_ROOT:
-            visit_node_list(node->data.root.list, visit, context);
+            visit_node_list(node->root.list, visit, context);
             break;
         case NODE_TYPE_OBJECT:
-            visit_node_list(node->data.object.free_list, visit, context);
-            visit_node_list(node->data.object.property_list, visit, context);
+            visit_node_list(node->object.free_list, visit, context);
+            visit_node_list(node->object.property_list, visit, context);
             break;
         case NODE_TYPE_PROPERTY:
-            visit_field(node->data.property.identifier, visit, context);
-            visit_field(node->data.property.property_value, visit, context);
+            visit_field(node->property.identifier, visit, context);
+            visit_field(node->property.property_value, visit, context);
             break;
         case NODE_TYPE_FREE_OBJECT_COPY_PARAMS:
             visit_node_list(
-                node->data.free_object_copy_params.parameter_list, visit,
-                context
+                node->free_object_copy_params.parameter_list, visit, context
             );
             break;
         case NODE_TYPE_OBJECT_COPY:
-            visit_field(node->data.object_copy.identifier, visit, context);
+            visit_field(node->object_copy.identifier, visit, context);
             visit_node_list(
-                node->data.object_copy.free_object_copies, visit, context
+                node->object_copy.free_object_copies, visit, context
             );
-            visit_field(node->data.object_copy.object_copy, visit, context);
+            visit_field(node->object_copy.object_copy, visit, context);
             break;
         case NODE_TYPE_DECORATOR:
-            visit_field(node->data.decorator.object, visit, context);
+            visit_field(node->decorator.object, visit, context);
             break;
         case NODE_TYPE_IDENTIFIER:
             break;

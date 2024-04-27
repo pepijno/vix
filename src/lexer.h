@@ -49,7 +49,7 @@ typedef struct {
         TokenIdentifier identifier;
         TokenChar char_literal;
         TokenInteger integer;
-    } data;
+    };
 } Token;
 
 typedef Token** TokenPtrArray;
@@ -66,5 +66,5 @@ void tokenize(
     Allocator allocator[static 1], Str source,
     TokenPtrArray tokens[static 1], Tokenized out[static 1]
 );
-u8* token_name(TokenType type);
+Str token_name(TokenType type);
 void print_tokens(Str source, TokenPtrArray tokens);
