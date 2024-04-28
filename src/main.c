@@ -89,8 +89,9 @@ int main(int argc, char* argv[]) {
                          .source_node = import_entry.root,
                          },
     };
-    analyzer.errors                = array(ErrorMessage*, &allocator);
-    analyzer.root_scope.properties = array(AstNode*, &allocator);
+    analyzer.errors                     = array(ErrorMessage*, &allocator);
+    analyzer.root_scope.properties      = array(AstNode*, &allocator);
+    analyzer.root_scope.free_properties = array(AstNode*, &allocator);
 
     analyse(&analyzer, import_entry.root);
 
@@ -102,17 +103,20 @@ int main(int argc, char* argv[]) {
                          .source_node = import_entry.root,
                          },
     };
-    code_gen.data_strings = array(StringData, &allocator);
-    StrBuffer buffer      = str_buffer_new(&allocator, 0);
+    analyzer.root_scope.properties      = array(AstNode*, &allocator);
+    analyzer.root_scope.free_properties = array(AstNode*, &allocator);
+
+    StrBuffer buffer = str_buffer_new(&allocator, 0);
     generate(&code_gen, &buffer, import_entry.root);
 
-    FILE* temp = fopen("vix.c", "w");
+    FILE* temp = fopen("vix.asm", "w");
     if (temp) {
         fprintf(temp, str_fmt, str_args(buffer));
         fclose(temp);
     }
 
-    system("gcc -O2 -Wall -Wextra -o vix vix.c");
+    system("nasm -g -felf64 vix.asm");
+    system("ld -o vix vix.o");
 
     arena_free(&arena);
 

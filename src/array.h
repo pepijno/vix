@@ -10,8 +10,8 @@ typedef struct {
 } array_header_t;
 
 static void* array_init(Allocator* allocator, i64 item_size) {
-    void* ptr   = 0;
-    i64 size = 4 * item_size + sizeof(array_header_t);
+    void* ptr = 0;
+    i64 size  = 4 * item_size + sizeof(array_header_t);
     array_header_t* header =
         (array_header_t*) allocator->allocate(size, allocator->context);
 
@@ -30,13 +30,14 @@ static void* array_init(Allocator* allocator, i64 item_size) {
 
 #define array_header(array) ((array_header_t*) (array) -1)
 
-#define array_capacity(array) ((array) ? array_header(array)->capacity : 0)
+#define array_item_size(array) ((array) ? array_header(array)->item_size : 0)
+#define array_capacity(array)  ((array) ? array_header(array)->capacity : 0)
 #define array_length(array) \
     ((array) ? (size) array_header(array)->length : (size) 0)
 
 static void* array_grow(void* array, i64 add_length, i64 capacity) {
     array_header_t* header = array_header(array);
-    i64 minimum_length  = header->length + add_length;
+    i64 minimum_length     = header->length + add_length;
 
     i64 minimum_capacity = capacity;
     // compute the minimum capacity needed
@@ -80,4 +81,5 @@ static void* array_grow(void* array, i64 add_length, i64 capacity) {
 #define array_push(a, v)                                              \
     ((a) = array_grow((a), 1, 0), (a)[array_header(a)->length] = (v), \
      &(a)[array_header(a)->length++])
+#define array_pop(a)  (array_header(a)->length--)
 #define array_last(a) ((a)[array_header(a)->length - 1])

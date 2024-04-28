@@ -8,6 +8,7 @@ struct Scope {
     AstNode const* const source_node;
     Scope* parent;
     AstNode** properties;
+    AstNode** free_properties;
 };
 
 typedef struct {

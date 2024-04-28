@@ -46,8 +46,8 @@ static void ast_expect_token(
 
     StrBuffer buffer = str_buffer_new(parse_context->allocator, 0);
     str_buffer_printf(
-        &buffer, str_new("expected token '%s', found '%s'"),
-        token_name(type), token_name(token->type)
+        &buffer, str_new("expected token '"str_fmt"', found '"str_fmt"'"),
+        str_args(token_name(type)), str_args(token_name(token->type))
     );
     ast_error(parse_context, token, str_buffer_str(&buffer));
 }
@@ -196,7 +196,6 @@ static AstNode* ast_parse_property(
     node->property.identifier->parent     = node;
     node->property.property_value->parent = node;
 
-    printf("index %ld\n", *token_index);
     ast_eat_token(parse_context, token_index, TOKEN_SEMICOLON);
 
     return node;

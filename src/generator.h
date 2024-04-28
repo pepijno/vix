@@ -5,14 +5,8 @@
 #include "analyser.h"
 
 typedef struct {
-    Str str;
-    i64 id;
-} StringData;
-
-typedef struct {
     Scope root_scope;
     Allocator* allocator;
-    StringData* data_strings;
 } CodeGen;
 
 void generate(

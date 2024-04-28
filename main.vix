@@ -1,12 +1,16 @@
-p = {
-	q = {
-		s = {
-			t = 5;
-		};
+true = {
+	if = whenTrue whenFalse > {
+		result = whenTrue;
 	};
-	r = 3;
 };
 
-a = 5;
+a = {
+	b = {
+		c = 5;
+		d = 7;
+		e = 3;
+	};
+	d = b.d;
+};
 
-main = p.q.s.t;
+main = true.if(3, 5).result;

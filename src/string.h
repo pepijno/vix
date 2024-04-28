@@ -11,7 +11,7 @@
 
 typedef struct {
     i64 length;
-    u8 data[256];
+    u8 data[2048];
 } Str;
 
 #define str_fmt     "%.*s"
@@ -22,7 +22,7 @@ static inline u8 str_at(Str str, i64 index) {
 }
 
 static inline Str _str_new_length_u8(u8* str, i64 length) {
-    assert(length <= 256);
+    assert(length <= 2048);
     Str s = (Str){
         .length = length,
     };
@@ -30,7 +30,7 @@ static inline Str _str_new_length_u8(u8* str, i64 length) {
     return s;
 }
 static inline Str _str_new_length_char(char* str, i64 length) {
-    assert(length <= 256);
+    assert(length <= 2048);
     Str s = (Str){
         .length = length,
     };
@@ -107,6 +107,14 @@ static StrBuffer str_buffer_new(Allocator allocator[static 1], i64 capacity) {
     };
     str_buffer_ensure_capacity(&buffer, capacity);
     return buffer;
+}
+
+static StrBuffer str_buffer_clone(StrBuffer buffer[static 1]) {
+    StrBuffer new_buffer = str_buffer_new(buffer->allocator, buffer->capacity);
+    new_buffer.capacity = buffer->capacity,
+    new_buffer.length = buffer->length,
+    memcpy(new_buffer.data, buffer->data, buffer->length);
+    return new_buffer;
 }
 
 static void str_buffer_reset(StrBuffer str_buffer[static 1]) {
