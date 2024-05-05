@@ -1,7 +1,6 @@
 #pragma once
 
-#include "allocator.h"
-#include "string.h"
+#include "defs.h"
 
 typedef enum {
     ERROR_COLOR_AUTO,
@@ -11,12 +10,12 @@ typedef enum {
 
 typedef struct ErrorMessage ErrorMessage;
 struct ErrorMessage {
-    i64 const line_start;
-    i64 const column_start;
-    Str const message;
-    Str const path;
-    Str line_buffer;
-    ErrorMessage** notes;
+    i32 const line_start;
+    i32 const column_start;
+    char const* message;
+    char const* path;
+    char* line_buffer;
+    ErrorMessage* next;
 };
 
 void print_error_message(
@@ -27,12 +26,7 @@ void error_message_add_note(
     ErrorMessage parent[static 1], ErrorMessage note[static 1]
 );
 
-ErrorMessage error_message_create_with_offset(
-    Allocator allocator[static 1], Str path, i64 line, i64 column,
-    i64 offset, Str source, Str message
-);
-
 ErrorMessage error_message_create_with_line(
-    Allocator allocator[static 1], Str path, i64 line, i64 column,
-    Str source, i64* line_offsets, Str message
+    char* path, i32 line, i32 column, char* source, i32* line_offsets,
+    char* message
 );

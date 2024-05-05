@@ -1,541 +1,396 @@
 #include "parser.h"
 
-#include "array.h"
-#include "lexer.h"
 #include "util.h"
 
-#include <assert.h>
-#include <string.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdnoreturn.h>
 
-typedef struct {
-    i64 id;
-    Str source;
-    AstNode* root;
-    TokenPtrArray* tokens;
-    ErrorColor const error_color;
-    ImportTableEntry* owner;
-    Allocator* allocator;
-} ParseContext;
+static noreturn void
+vsynerror(struct token_t token[static 1], va_list ap) {
+    enum lex_token_type_e type = va_arg(ap, enum lex_token_type_e);
 
-static void ast_error(
-    ParseContext parse_context[static 1], Token token[static 1], Str message
-) {
-    ErrorMessage error = error_message_create_with_line(
-        parse_context->allocator, parse_context->owner->path, token->start_line,
-        token->start_column, parse_context->owner->source_code,
-        parse_context->owner->line_offsets, message
+    fprintf(
+        stderr, "%s:%d:%d: syntax error: expected ",
+        sources[token->location.file], token->location.line_number,
+        token->location.column_number
     );
 
-    print_error_message(&error, parse_context->error_color);
-    exit(EXIT_FAILURE);
+    while (type != TOKEN_EOF) {
+        if (type == TOKEN_INTEGER || type == TOKEN_NAME) {
+            fprintf(stderr, "%s", token_names[type]);
+        } else {
+            fprintf(stderr, "'%s'", token_names[type]);
+        }
+
+        type = va_arg(ap, enum lex_token_type_e);
+        fprintf(stderr, ", ");
+    }
+
+    fprintf(stderr, "found '%s'\n", token_names[token->type]);
+    error_line(token->location);
+    exit(EXIT_PARSE);
 }
 
-static Str token_buffer(Token token[static 1]) {
-    assert(
-        token->type == TOKEN_STRING_LITERAL || token->type == TOKEN_IDENTIFIER
-    );
-    return token->string_literal.string;
+static noreturn void
+synerror(struct token_t token[static 1], ...) {
+    va_list ap;
+    va_start(ap, token);
+    vsynerror(token, ap);
+    va_end(ap);
 }
 
-static void ast_expect_token(
-    ParseContext parse_context[static 1], Token token[static 1], TokenType type
+static void
+synassert(bool condition, struct token_t token[static 1], ...) {
+    if (!condition) {
+        va_list ap;
+        va_start(ap, token);
+        vsynerror(token, ap);
+        va_end(ap);
+    }
+}
+
+static void
+expect_token(
+    struct lexer_t lexer[static 1], enum lex_token_type_e token_type,
+    struct token_t* token
 ) {
-    if (token->type == type) {
-        return;
-    }
-
-    StrBuffer buffer = str_buffer_new(parse_context->allocator, 0);
-    str_buffer_printf(
-        &buffer, str_new("expected token '"str_fmt"', found '"str_fmt"'"),
-        str_args(token_name(type)), str_args(token_name(token->type))
-    );
-    ast_error(parse_context, token, str_buffer_str(&buffer));
-}
-
-static Token* ast_eat_token(
-    ParseContext parse_context[static 1], i64 token_index[static 1],
-    TokenType type
-) {
-    Token* token = (*parse_context->tokens)[*token_index];
-    ast_expect_token(parse_context, token, type);
-    *token_index += 1;
-    return token;
-}
-
-static AstNode* ast_node_create(
-    ParseContext parse_context[static 1], NodeType type,
-    Token first_token[static 1]
-) {
-    AstNode node = {
-        .id     = parse_context->id,
-        .type   = type,
-        .line   = first_token->start_line,
-        .column = first_token->start_column,
-        .owner  = parse_context->owner,
-    };
-    AstNode* ptr = (AstNode*) parse_context->allocator->allocate(
-        sizeof(AstNode), parse_context->allocator->context
-    );
-    memcpy(ptr, &node, sizeof(AstNode));
-    parse_context->id += 1;
-    return ptr;
-}
-
-static AstNode* ast_parse_property(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-static AstNode* ast_parse_string_literal(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-static AstNode* ast_parse_char_literal(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-static AstNode* ast_parse_integer_literal(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-static AstNode* ast_parse_object(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-static AstNode* ast_parse_property_value(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-static AstNode* ast_parse_object_copy(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-static AstNode* ast_parse_decorator(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-);
-
-static AstNode* ast_parse_string_literal(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    Token* token = (*parse_context->tokens)[*token_index];
-    if (token->type == TOKEN_STRING_LITERAL) {
-        *token_index += 1;
-        AstNode* node =
-            ast_node_create(parse_context, NODE_TYPE_STRING_LITERAL, token);
-        node->string_literal.content = token_buffer(token);
-        return node;
-    } else {
-        return nullptr;
+    struct token_t _token = {};
+    struct token_t* out   = token != nullptr ? token : &_token;
+    lex(lexer, out);
+    synassert(out->type == token_type, out, token_type, TOKEN_EOF);
+    if (token == nullptr) {
+        token_finish(out);
     }
 }
 
-static AstNode* ast_parse_char_literal(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
+static void
+parse_free_properties(
+    struct lexer_t lexer[static 1],
+    struct ast_free_property_t free_property[static 1]
 ) {
-    Token* token = (*parse_context->tokens)[*token_index];
-    if (token->type == TOKEN_CHAR_LITERAL) {
-        *token_index += 1;
-        AstNode* node =
-            ast_node_create(parse_context, NODE_TYPE_CHAR_LITERAL, token);
-        node->char_literal.c = token->char_literal.c;
-        return node;
-    } else {
-        return nullptr;
-    }
-}
-
-static AstNode* ast_parse_integer_literal(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    Token* token = (*parse_context->tokens)[*token_index];
-    if (token->type == TOKEN_INT) {
-        *token_index += 1;
-        AstNode* node =
-            ast_node_create(parse_context, NODE_TYPE_INTEGER, token);
-        node->integer.content = token->integer.integer;
-        return node;
-    } else {
-        return nullptr;
-    }
-}
-
-// identifier ::= [A-Za-z][A-Za-z0-9_]*
-static AstNode* ast_parse_identifier(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    Token* token = (*parse_context->tokens)[*token_index];
-    if (token->type == TOKEN_IDENTIFIER) {
-        *token_index += 1;
-        AstNode* node =
-            ast_node_create(parse_context, NODE_TYPE_IDENTIFIER, token);
-        node->identifier.content = token_buffer(token);
-        assert(node->identifier.content.length != 0);
-        return node;
-    } else {
-        return nullptr;
-    }
-}
-
-// property ::= identifier assignment property_value ";"
-static AstNode* ast_parse_property(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    i64 original_token_index = *token_index;
-    AstNode* identifier      = ast_parse_identifier(parse_context, token_index);
-    if (!identifier) {
-        *token_index = original_token_index;
-        return nullptr;
-    }
-
-    Token* assign_token =
-        ast_eat_token(parse_context, token_index, TOKEN_ASSIGN);
-
-    AstNode* property_value =
-        ast_parse_property_value(parse_context, token_index);
-    if (property_value == nullptr) {
-        *token_index = original_token_index;
-        return nullptr;
-    }
-
-    AstNode* node =
-        ast_node_create(parse_context, NODE_TYPE_PROPERTY, assign_token);
-    node->property.identifier             = identifier;
-    node->property.property_value         = property_value;
-    node->property.identifier->parent     = node;
-    node->property.property_value->parent = node;
-
-    ast_eat_token(parse_context, token_index, TOKEN_SEMICOLON);
-
-    return node;
-}
-
-// property_value ::= object | object_copy | STRING | CHAR | INTEGER
-static AstNode* ast_parse_property_value(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    AstNode* object = ast_parse_object(parse_context, token_index);
-    if (object) {
-        return object;
-    }
-
-    AstNode* object_copy = ast_parse_object_copy(parse_context, token_index);
-    if (object_copy) {
-        return object_copy;
-    }
-
-    AstNode* string_literal =
-        ast_parse_string_literal(parse_context, token_index);
-    if (string_literal) {
-        return string_literal;
-    }
-
-    AstNode* char_literal = ast_parse_char_literal(parse_context, token_index);
-    if (char_literal) {
-        return char_literal;
-    }
-
-    AstNode* integer = ast_parse_integer_literal(parse_context, token_index);
-    if (integer) {
-        return integer;
-    }
-
-    return nullptr;
-}
-
-// free_object_copy_params ::= "(" property_value ("," property_value)* ")"
-static AstNode* ast_parse_free_object_copy_params(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    i64 original_token_index = *token_index;
-    Token* next_token        = (*parse_context->tokens)[*token_index];
-
-    if (next_token->type == TOKEN_OPEN_PAREN) {
-        *token_index += 1;
-        next_token = (*parse_context->tokens)[*token_index];
-    } else {
-        *token_index = original_token_index;
-        return nullptr;
-    }
-
-    AstNode* free_copy = ast_node_create(
-        parse_context, NODE_TYPE_FREE_OBJECT_COPY_PARAMS, next_token
-    );
-    free_copy->free_object_copy_params.parameter_list =
-        array(AstNode*, parse_context->allocator);
+    free_property->next  = malloc(sizeof(struct ast_free_property_t));
+    struct token_t token = {};
+    struct ast_free_property_t** next = &free_property->next;
     while (true) {
-        AstNode* property_value =
-            ast_parse_property_value(parse_context, token_index);
-        if (property_value) {
-            array_push(
-                free_copy->free_object_copy_params.parameter_list,
-                property_value
-            );
-            property_value->parent = free_copy;
-        } else {
-            *token_index = original_token_index;
-            return nullptr;
-        }
-
-        next_token = (*parse_context->tokens)[*token_index];
-        if (next_token->type == TOKEN_CLOSE_PAREN) {
-            *token_index += 1;
-            return free_copy;
-        } else if (next_token->type == TOKEN_COMMA) {
-            *token_index += 1;
-        } else {
-            *token_index = original_token_index;
-            return nullptr;
-        }
-    }
-
-    return free_copy;
-}
-
-// object_copy ::= identifier (free_object_copy)* ("." object_copy)?
-static AstNode* ast_parse_object_copy(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    i64 original_token_index = *token_index;
-    AstNode* identifier      = ast_parse_identifier(parse_context, token_index);
-    if (!identifier) {
-        *token_index = original_token_index;
-        return nullptr;
-    }
-
-    Token* next_token = (*parse_context->tokens)[*token_index];
-
-    AstNode* object_copy =
-        ast_node_create(parse_context, NODE_TYPE_OBJECT_COPY, next_token);
-    object_copy->object_copy.identifier = identifier;
-    identifier->parent                  = object_copy;
-    object_copy->object_copy.free_object_copies =
-        array(AstNode*, parse_context->allocator);
-
-    while (true) {
-        AstNode* free_object_copy =
-            ast_parse_free_object_copy_params(parse_context, token_index);
-        if (free_object_copy != nullptr) {
-            free_object_copy->parent = object_copy;
-            array_push(
-                object_copy->object_copy.free_object_copies, free_object_copy
-            );
-        } else {
-            break;
-        }
-    }
-
-    next_token = (*parse_context->tokens)[*token_index];
-
-    if (next_token->type == TOKEN_DOT) {
-        *token_index += 1;
-        AstNode* next_object_copy =
-            ast_parse_object_copy(parse_context, token_index);
-        if (next_object_copy) {
-            object_copy->object_copy.object_copy = next_object_copy;
-            next_object_copy->parent             = object_copy;
-        } else {
-            *token_index = original_token_index;
-            return nullptr;
-        }
-    }
-
-    return object_copy;
-}
-
-// object ::= (identifier+ ">")? (("{" (decorator | property)* "}") |
-// object_copy)
-static AstNode* ast_parse_object(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    Token* token = (*parse_context->tokens)[*token_index];
-
-    AstNode* object = ast_node_create(parse_context, NODE_TYPE_OBJECT, token);
-    object->object.free_list     = array(AstNode*, parse_context->allocator);
-    object->object.property_list = array(AstNode*, parse_context->allocator);
-
-    i64 original_token_index = *token_index;
-
-    if (token->type == TOKEN_IDENTIFIER) {
-        while (true) {
-            AstNode* identifier =
-                ast_parse_identifier(parse_context, token_index);
-            if (identifier) {
-                array_push(object->object.free_list, identifier);
-                identifier->parent = object;
-                continue;
-            }
-            Token* next_token = (*parse_context->tokens)[*token_index];
-            if (next_token->type == TOKEN_GREATER_THAN) {
-                *token_index += 1;
-                token = (*parse_context->tokens)[*token_index];
+        switch (lex(lexer, &token)) {
+            case TOKEN_NAME:
+                (*next)->name = token.name;
+                (*next)->next = malloc(sizeof(struct ast_free_property_t));
+                next          = &(*next)->next;
                 break;
-            } else {
-                *token_index = original_token_index;
-                return nullptr;
-            }
-        }
-    }
-
-    token = (*parse_context->tokens)[*token_index];
-
-    if (token->type == TOKEN_OPEN_BRACE) {
-        *token_index += 1;
-        while (true) {
-            AstNode* decorator =
-                ast_parse_decorator(parse_context, token_index);
-            if (decorator) {
-                array_push(object->object.property_list, decorator);
-                decorator->parent = object;
-                continue;
-            }
-
-            AstNode* property = ast_parse_property(parse_context, token_index);
-            if (property) {
-                array_push(object->object.property_list, property);
-                property->parent = object;
-                continue;
-            }
-
-            token = (*parse_context->tokens)[*token_index];
-            if (token->type == TOKEN_CLOSE_BRACE) {
-                *token_index += 1;
-                return object;
-            } else {
-                *token_index = original_token_index;
-                return nullptr;
-            }
-        }
-    } else {
-        AstNode* object_copy =
-            ast_parse_object_copy(parse_context, token_index);
-        if (object_copy != nullptr) {
-            object->object_copy.object_copy = object_copy;
-            object_copy->parent             = object;
-            return object;
-        } else {
-            *token_index = original_token_index;
-            return nullptr;
+            case TOKEN_GREATER_THAN:
+                free(*next);
+                *next = nullptr;
+                return;
+            default:
+                synerror(&token, TOKEN_GREATER_THAN, TOKEN_NAME, TOKEN_EOF);
         }
     }
 
     vix_unreachable();
 }
 
-// decorator :== "..." property_value ";"
-static AstNode* ast_parse_decorator(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    Token* token             = (*parse_context->tokens)[*token_index];
-    i64 original_token_index = *token_index;
-    if (token->type == TOKEN_DOT_DOT_DOT) {
-        *token_index += 1;
-        AstNode* property_value =
-            ast_parse_property_value(parse_context, token_index);
-        AstNode* node =
-            ast_node_create(parse_context, NODE_TYPE_DECORATOR, token);
-        if (property_value) {
-            node->decorator.object = property_value;
-            property_value->parent = node;
-        } else {
-            *token_index = original_token_index;
-            return nullptr;
-        }
+static struct ast_object_t* parse_object(struct lexer_t lexer[static 1]);
 
-        ast_eat_token(parse_context, token_index, TOKEN_SEMICOLON);
-        return node;
-    } else {
+static void
+parse_object_copies(
+    struct lexer_t lexer[static 1],
+    struct ast_object_copy_t object_copy[static 1]
+) {
+    struct ast_object_copy_t** next = &object_copy;
+    struct token_t token            = {};
+    while (true) {
+        switch (lex(lexer, &token)) {
+            case TOKEN_DOT: {
+                (*next)->next = malloc(sizeof(struct ast_object_copy_t));
+                next          = &(*next)->next;
+                struct token_t token2 = {};
+                expect_token(lexer, TOKEN_NAME, &token2);
+                (*next)->name = token2.name;
+                break;
+            }
+            case TOKEN_OPEN_PAREN: {
+                (*next)->free_properties
+                    = malloc(sizeof(struct ast_free_property_assign_t));
+                struct ast_free_property_assign_t** next_free_property_assign
+                    = &(*next)->free_properties;
+                struct token_t token2      = {};
+                enum lex_token_type_e type = lex(lexer, &token2);
+                if (type == TOKEN_CLOSE_PAREN) {
+                    free(*next_free_property_assign);
+                    *next_free_property_assign = nullptr;
+                    break;
+                } else {
+                    unlex(lexer, &token2);
+                    (*next_free_property_assign)->value = parse_object(lexer);
+                    (*next_free_property_assign)->next
+                        = malloc(sizeof(struct ast_free_property_assign_t));
+                    next_free_property_assign
+                        = &(*next_free_property_assign)->next;
+                }
+                bool break_out = false;
+                while (!break_out) {
+                    switch (lex(lexer, &token2)) {
+                        case TOKEN_CLOSE_PAREN:
+                            free(*next_free_property_assign);
+                            *next_free_property_assign = nullptr;
+                            break_out                  = true;
+                            break;
+                        case TOKEN_COMMA:
+                            (*next_free_property_assign)->value
+                                = parse_object(lexer);
+                            (*next_free_property_assign)->next = malloc(
+                                sizeof(struct ast_free_property_assign_t)
+                            );
+                            next_free_property_assign
+                                = &(*next_free_property_assign)->next;
+                            break;
+                        default:
+                            synerror(
+                                &token2, TOKEN_CLOSE_PAREN, TOKEN_COMMA,
+                                TOKEN_EOF
+                            );
+                    }
+                }
+                break;
+            }
+            case TOKEN_SEMICOLON: {
+                unlex(lexer, &token);
+                return;
+            }
+            default: {
+                synerror(
+                    &token, TOKEN_DOT, TOKEN_OPEN_PAREN, TOKEN_SEMICOLON,
+                    TOKEN_EOF
+                );
+            }
+        }
+    }
+}
+
+static struct ast_property_t* parse_property(struct lexer_t lexer[static 1]);
+
+// object ::= (identifier+ ">")? (("{" (property)* "}") | object_copy |
+// primitive)
+static struct ast_object_t*
+parse_object(struct lexer_t lexer[static 1]) {
+    struct token_t token        = {};
+    struct ast_object_t* object = malloc(sizeof(struct ast_object_t));
+
+    switch (lex(lexer, &token)) {
+        case TOKEN_NAME: {
+            // name can mean both identifiers or object copy
+            struct token_t token2 = {};
+            switch (lex(lexer, &token2)) {
+                case TOKEN_NAME: { // more than one free property
+                    unlex(lexer, &token2);
+                    object->free_properties
+                        = malloc(sizeof(struct ast_free_property_t));
+                    object->free_properties->name = token.name;
+                    parse_free_properties(lexer, object->free_properties);
+                    break;
+                }
+                case TOKEN_GREATER_THAN: { // only one free property
+                    object->free_properties
+                        = malloc(sizeof(struct ast_free_property_t));
+                    object->free_properties->name = token.name;
+                    break;
+                }
+                default: { // object copy
+                    object->type = OBJECT_TYPE_OBJECT_COPY;
+                    unlex(lexer, &token2);
+                    struct ast_object_copy_t* object_copy
+                        = malloc(sizeof(struct ast_object_copy_t));
+                    object->object_copy = object_copy;
+                    object_copy->name   = token.name;
+                    parse_object_copies(lexer, object_copy);
+                    break;
+                }
+            }
+            break;
+        }
+        default:
+            unlex(lexer, &token);
+            break;
+    }
+    if (object->type == OBJECT_TYPE_OBJECT_COPY) {
+        return object;
+    }
+    switch (lex(lexer, &token)) {
+        case TOKEN_NAME:
+            object->type = OBJECT_TYPE_OBJECT_COPY;
+            struct ast_object_copy_t* object_copy
+                = malloc(sizeof(struct ast_object_copy_t));
+            object->object_copy = object_copy;
+            object_copy->name   = token.name;
+            parse_object_copies(lexer, object_copy);
+            break;
+            break;
+        case TOKEN_OPEN_BRACE: {
+            object->type          = OBJECT_TYPE_PROPERTIES;
+            struct token_t token2 = {};
+            object->properties    = malloc(sizeof(struct ast_property_t));
+            struct ast_property_t** next_property = &object->properties;
+            bool break_out                        = false;
+            while (!break_out) {
+                switch (lex(lexer, &token2)) {
+                    case TOKEN_CLOSE_BRACE:
+                        free(*next_property);
+                        *next_property = nullptr;
+                        break_out      = true;
+                        break;
+                    default:
+                        unlex(lexer, &token2);
+                        *next_property = parse_property(lexer);
+                        (*next_property)->next
+                            = malloc(sizeof(struct ast_property_t));
+                        next_property = &(*next_property)->next;
+                        break;
+                }
+            }
+            break;
+        }
+        case TOKEN_INTEGER:
+            object->type    = OBJECT_TYPE_INTEGER;
+            object->integer = token.integer;
+            break;
+        case TOKEN_STRING:
+            object->type   = OBJECT_TYPE_STRING;
+            object->string = token.string.value;
+            break;
+        default:
+            unlex(lexer, &token);
+            break;
+    }
+
+    return object;
+}
+
+// property ::= identifier "=" object ";"
+static struct ast_property_t*
+parse_property(struct lexer_t lexer[static 1]) {
+    struct token_t token       = {};
+    enum lex_token_type_e type = lex(lexer, &token);
+    if (type != TOKEN_NAME) {
+        unlex(lexer, &token);
         return nullptr;
     }
+    struct ast_property_t* property = malloc(sizeof(struct ast_property_t));
+    property->name                  = token.name;
+
+    expect_token(lexer, TOKEN_ASSIGN, nullptr);
+
+    property->object = parse_object(lexer);
+
+    expect_token(lexer, TOKEN_SEMICOLON, nullptr);
+
+    return property;
 }
 
-// root ::= property*
-static AstNode* ast_parse_root(
-    ParseContext parse_context[static 1], i64 token_index[static 1]
-) {
-    AstNode* node = ast_node_create(
-        parse_context, NODE_TYPE_ROOT, (*parse_context->tokens)[*token_index]
-    );
-    node->root.list = array(AstNode*, parse_context->allocator);
+static struct ast_object_t*
+parse_root(struct lexer_t lexer[static 1]) {
+    struct ast_object_t* object = malloc(sizeof(struct ast_object_t));
+    object->type                = OBJECT_TYPE_PROPERTIES;
+    object->properties          = malloc(sizeof(struct ast_property_t));
+    struct ast_property_t** next_property = &object->properties;
 
     while (true) {
-        AstNode* property_node = ast_parse_property(parse_context, token_index);
-        if (property_node) {
-            array_push(node->root.list, property_node);
-            property_node->parent = node;
-            continue;
+        *next_property = parse_property(lexer);
+        if (*next_property == nullptr) {
+            break;
         }
-
-        break;
+        (*next_property)->next = malloc(sizeof(struct ast_property_t));
+        next_property          = &(*next_property)->next;
     }
-
-    return node;
+    free(*next_property);
+    *next_property = nullptr;
+    return object;
 }
 
-AstNode* ast_parse(
-    Allocator allocator[static 1], Str source, TokenPtrArray tokens[static 1],
-    ImportTableEntry owner[static 1], ErrorColor error_color
-) {
-    ParseContext parse_context = {
-        .id          = 0,
-        .error_color = error_color,
-        .source      = source,
-        .owner       = owner,
-        .tokens      = tokens,
-        .allocator   = allocator,
-    };
-    i64 token_index    = 0;
-    parse_context.root = ast_parse_root(&parse_context, &token_index);
-    return parse_context.root;
+struct ast_object_t*
+parse(struct lexer_t lexer[static 1]) {
+    struct ast_object_t* root = parse_root(lexer);
+    expect_token(lexer, TOKEN_EOF, nullptr);
+    return root;
 }
 
-static void visit_field(
-    AstNode* node, void (*visit)(AstNode*, void* context), void* context
-) {
-    if (node) {
-        visit(node, context);
+static void
+print_indent(i32 indent) {
+    for (i32 i = 0; i < indent; ++i) {
+        fprintf(stdout, " ");
     }
 }
 
-static void visit_node_list(
-    AstNode** list, void (*visit)(AstNode*, void* context), void* context
-) {
-    if (list) {
-        for (i64 i = 0; i < array_header(list)->length; ++i) {
-            visit(list[i], context);
-        }
+static void
+print_free_property(struct ast_free_property_t* free_property, i32 indent) {
+    if (free_property == nullptr) {
+        return;
     }
+    print_indent(indent);
+    fprintf(stdout, "Free Property: %s\n", free_property->name);
+    print_free_property(free_property->next, indent);
 }
 
-void ast_visit_node_children(
-    AstNode node[static 1], void (*visit)(AstNode*, void* context),
-    void* context
+static void
+print_property(struct ast_property_t* property, i32 indent) {
+    if (property == nullptr) {
+        return;
+    }
+    print_indent(indent);
+    fprintf(stdout, "Property: %s\n", property->name);
+    print_object(property->object, indent + 2);
+    print_property(property->next, indent);
+}
+
+static void
+print_free_property_assign(
+    struct ast_free_property_assign_t* free_property_assign, i32 indent
 ) {
-    switch (node->type) {
-        case NODE_TYPE_ROOT:
-            visit_node_list(node->root.list, visit, context);
+    if (free_property_assign == nullptr) {
+        return;
+    }
+    print_indent(indent);
+    fprintf(stdout, "Free Property Assign:\n");
+    print_object(free_property_assign->value, indent + 2);
+    print_free_property_assign(free_property_assign->next, indent);
+}
+
+static void
+print_object_copy(struct ast_object_copy_t* object_copy, i32 indent) {
+    if (object_copy == nullptr) {
+        return;
+    }
+    print_indent(indent);
+    fprintf(stdout, "Object Copy: %s\n", object_copy->name);
+    print_free_property_assign(object_copy->free_properties, indent + 2);
+    print_object_copy(object_copy->next, indent);
+}
+
+void
+print_object(struct ast_object_t* object, i32 indent) {
+    if (object == nullptr) {
+        return;
+    }
+    print_indent(indent);
+    fprintf(stdout, "Object:\n");
+    print_free_property(object->free_properties, indent + 2);
+    switch (object->type) {
+        case OBJECT_TYPE_OBJECT_COPY:
+            print_object_copy(object->object_copy, indent + 2);
             break;
-        case NODE_TYPE_OBJECT:
-            visit_node_list(node->object.free_list, visit, context);
-            visit_node_list(node->object.property_list, visit, context);
+        case OBJECT_TYPE_PROPERTIES:
+            print_property(object->properties, indent + 2);
             break;
-        case NODE_TYPE_PROPERTY:
-            visit_field(node->property.identifier, visit, context);
-            visit_field(node->property.property_value, visit, context);
+        case OBJECT_TYPE_INTEGER:
+            print_indent(indent);
+            fprintf(stdout, "  value: %d\n", object->integer);
             break;
-        case NODE_TYPE_FREE_OBJECT_COPY_PARAMS:
-            visit_node_list(
-                node->free_object_copy_params.parameter_list, visit, context
-            );
+        case OBJECT_TYPE_STRING:
+            print_indent(indent);
+            fprintf(stdout, "  value: %s\n", object->string);
             break;
-        case NODE_TYPE_OBJECT_COPY:
-            visit_field(node->object_copy.identifier, visit, context);
-            visit_node_list(
-                node->object_copy.free_object_copies, visit, context
-            );
-            visit_field(node->object_copy.object_copy, visit, context);
-            break;
-        case NODE_TYPE_DECORATOR:
-            visit_field(node->decorator.object, visit, context);
-            break;
-        case NODE_TYPE_IDENTIFIER:
-            break;
-        case NODE_TYPE_STRING_LITERAL:
-            break;
-        case NODE_TYPE_CHAR_LITERAL:
-            break;
-        case NODE_TYPE_INTEGER:
+        case OBJECT_TYPE_NONE:
             break;
     }
 }

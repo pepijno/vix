@@ -1,504 +1,459 @@
 #include "lexer.h"
 
-#include "array.h"
-#include "string.h"
+#include "utf8.h"
 #include "util.h"
 
 #include <assert.h>
+#include <ctype.h>
+#include <inttypes.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdnoreturn.h>
 #include <string.h>
 
-#define WHITESPACE   \
-    ' ' : case '\t': \
-    case '\r':       \
-    case '\n'
+char const* token_names[] = { [TOKEN_NONE]         = "TOKEN_NONE",
+                              [TOKEN_NAME]         = "TOKEN_NAME",
+                              [TOKEN_ASSIGN]       = "TOKEN_ASSIGN",
+                              [TOKEN_DOT]          = "TOKEN_DOT",
+                              [TOKEN_DOT_DOT_DOT]  = "TOKEN_DOT_DOT_DOT",
+                              [TOKEN_COMMA]        = "TOKEN_COMMA",
+                              [TOKEN_CHAR]         = "TOKEN_CHAR",
+                              [TOKEN_STRING]       = "TOKEN_STRING",
+                              [TOKEN_OPEN_BRACE]   = "TOKEN_OPEN_BRACE",
+                              [TOKEN_CLOSE_BRACE]  = "TOKEN_CLOSE_BRACE",
+                              [TOKEN_OPEN_PAREN]   = "TOKEN_OPEN_BRACE",
+                              [TOKEN_CLOSE_PAREN]  = "TOKEN_CLOSE_PAREN",
+                              [TOKEN_GREATER_THAN] = "TOKEN_GREATER_THAN",
+                              [TOKEN_SEMICOLON]    = "TOKEN_SEMICOLON",
+                              [TOKEN_INTEGER]      = "TOKEN_INTEGER",
+                              [TOKEN_EOF]          = "TOKEN_EOF" };
 
-#define DIGIT       \
-    '0' : case '1': \
-    case '2':       \
-    case '3':       \
-    case '4':       \
-    case '5':       \
-    case '6':       \
-    case '7':       \
-    case '8':       \
-    case '9'
+static noreturn void
+error(struct location_t location, char const* format, ...) {
+    fprintf(
+        stderr, "%s:%d:%d: syntax error: ", "vix", location.line_number,
+        location.column_number
+    );
 
-#define ALPHA       \
-    'a' : case 'b': \
-    case 'c':       \
-    case 'd':       \
-    case 'e':       \
-    case 'f':       \
-    case 'g':       \
-    case 'h':       \
-    case 'i':       \
-    case 'j':       \
-    case 'k':       \
-    case 'l':       \
-    case 'm':       \
-    case 'n':       \
-    case 'o':       \
-    case 'p':       \
-    case 'q':       \
-    case 'r':       \
-    case 's':       \
-    case 't':       \
-    case 'u':       \
-    case 'v':       \
-    case 'w':       \
-    case 'x':       \
-    case 'y':       \
-    case 'z':       \
-    case 'A':       \
-    case 'B':       \
-    case 'C':       \
-    case 'D':       \
-    case 'E':       \
-    case 'F':       \
-    case 'G':       \
-    case 'H':       \
-    case 'I':       \
-    case 'J':       \
-    case 'K':       \
-    case 'L':       \
-    case 'M':       \
-    case 'N':       \
-    case 'O':       \
-    case 'P':       \
-    case 'Q':       \
-    case 'R':       \
-    case 'S':       \
-    case 'T':       \
-    case 'U':       \
-    case 'V':       \
-    case 'W':       \
-    case 'X':       \
-    case 'Y':       \
-    case 'Z'
+    va_list ap;
+    va_start(ap, format);
+    vfprintf(stderr, format, ap);
+    va_end(ap);
 
-#define SYMBOL_CHAR \
-    ALPHA:          \
-    case DIGIT:     \
-    case '_'
-
-typedef enum {
-    TOKENIZE_STATE_START,
-    TOKENIZE_STATE_STRING,
-    TOKENIZE_STATE_STRING_ESCAPE,
-    TOKENIZE_STATE_CHAR,
-    TOKENIZE_STATE_CHAR_END,
-    TOKENIZE_STATE_IDENTIFIER,
-    TOKENIZE_STATE_SAW_DOT,
-    TOKENIZE_STATE_SAW_DOT_DOT,
-    TOKENIZE_STATE_SAW_DIGIT,
-    TOKENIZE_STATE_ERROR,
-} TokenizeState;
-
-typedef struct {
-    Str source;
-    Tokenized* const out;
-    TokenPtrArray* tokens;
-    Allocator* allocator;
-
-    i64 position;
-    TokenizeState state;
-    i64 line;
-    i64 column;
-    Token* current_token;
-} Tokenize;
-
-static void set_token_type(Token token[static 1], TokenType type) {
-    token->type = type;
-
-    if (type == TOKEN_STRING_LITERAL) {
-        token->string_literal.string = str_new_empty();
-    } else if (type == TOKEN_IDENTIFIER) {
-        token->identifier.identifier = str_new_empty();
-    } else if (type == TOKEN_INT) {
-        token->integer.integer = str_new_empty();
-    }
+    fprintf(stderr, "\n");
+    error_line(location);
+    exit(EXIT_LEX);
 }
 
-static void begin_token(Tokenize t[static 1], TokenType type) {
-    assert(!t->current_token);
-    Token* token =
-        (Token*) t->allocator->allocate(sizeof(Token), t->allocator->context);
-    token->start_line     = t->line;
-    token->start_column   = t->column;
-    token->start_position = t->position, set_token_type(token, type);
-    array_push(*t->tokens, token);
-
-    t->current_token = token;
-}
-
-static void end_token(Tokenize t[static 1]) {
-    assert(t->current_token);
-    t->current_token->end_position = t->position + 1;
-
-    t->current_token = NULL;
-}
-
-static void tokenize_error(Tokenize t[static 1], Str str) {
-    t->state = TOKENIZE_STATE_ERROR;
-
-    if (t->current_token) {
-        t->out->error_line   = t->current_token->start_line;
-        t->out->error_column = t->current_token->start_column;
-    } else {
-        t->out->error_line   = t->line;
-        t->out->error_column = t->column;
-    }
-
-    t->out->error = str;
-}
-
-static void handle_string_escape(
-    Tokenize t[static 1], StrBuffer str_buffer[static 1], u8 c
-) {
-    if (t->current_token->type == TOKEN_CHAR_LITERAL) {
-        t->current_token->char_literal.c = c;
-        t->state                         = TOKENIZE_STATE_CHAR_END;
-    } else if (t->current_token->type == TOKEN_STRING_LITERAL || t->current_token->type == TOKEN_IDENTIFIER) {
-        str_buffer_append_char(str_buffer, c);
-        t->state = TOKENIZE_STATE_STRING;
-    } else {
-        vix_unreachable();
-    }
-}
-
-void tokenize(
-    Allocator allocator[static 1], Str source, TokenPtrArray tokens[static 1],
-    Tokenized out[static 1]
-) {
-    Tokenize t = {
-        .out       = out,
-        .tokens    = tokens,
-        .source    = source,
-        .allocator = allocator,
+struct lexer_t
+lexer_new(FILE* f, i32 file_id) {
+    return (struct lexer_t){
+        .in          = f,
+        .buffer_size = 256,
+        .buffer      = calloc(1, 256),
+        .un =
+            (struct token_t){
+                             .type = TOKEN_NONE,
+                             },
+        .location =
+            (struct location_t){
+                             .line_number   = 1,
+                             .column_number = 0,
+                             .file          = file_id,
+                             },
+        .c =
+            {
+                             (struct codepoint_t){.ok = false},
+                             (struct codepoint_t){.ok = false},
+                             },
     };
-    out->tokens = t.tokens;
+}
 
-    out->line_offsets = array(i64, t.allocator);
+static void
+lexer_clear_buffer(struct lexer_t lexer[static 1]) {
+    lexer->buffer_length = 0;
+    lexer->buffer[0]     = 0;
+}
 
-    StrBuffer buffer = str_buffer_new(allocator, 0);
-    str_buffer_reset(&buffer);
+void
+lexer_finish(struct lexer_t lexer[static 1]) {
+    fclose(lexer->in);
+    free(lexer->buffer);
+}
 
-    array_push(out->line_offsets, 0);
-    for (t.position = 0; t.position < t.source.length; t.position++) {
-        u8 c = str_at(t.source, t.position);
-        switch (t.state) {
-            case TOKENIZE_STATE_ERROR:
-                break;
-            case TOKENIZE_STATE_START:
-                switch (c) {
-                    case WHITESPACE:
-                        break;
-                    case ';':
-                        begin_token(&t, TOKEN_SEMICOLON);
-                        end_token(&t);
-                        break;
-                    case '{':
-                        begin_token(&t, TOKEN_OPEN_BRACE);
-                        end_token(&t);
-                        break;
-                    case '}':
-                        begin_token(&t, TOKEN_CLOSE_BRACE);
-                        end_token(&t);
-                        break;
-                    case '(':
-                        begin_token(&t, TOKEN_OPEN_PAREN);
-                        end_token(&t);
-                        break;
-                    case ')':
-                        begin_token(&t, TOKEN_CLOSE_PAREN);
-                        end_token(&t);
-                        break;
-                    case '=':
-                        begin_token(&t, TOKEN_ASSIGN);
-                        end_token(&t);
-                        break;
-                    case ',':
-                        begin_token(&t, TOKEN_COMMA);
-                        end_token(&t);
-                        break;
-                    case '.':
-                        begin_token(&t, TOKEN_DOT);
-                        t.state = TOKENIZE_STATE_SAW_DOT;
-                        break;
-                    case '>':
-                        begin_token(&t, TOKEN_GREATER_THAN);
-                        end_token(&t);
-                        break;
-                    case '"':
-                        begin_token(&t, TOKEN_STRING_LITERAL);
-                        t.state = TOKENIZE_STATE_STRING;
-                        break;
-                    case '\'':
-                        begin_token(&t, TOKEN_CHAR_LITERAL);
-                        t.state = TOKENIZE_STATE_CHAR;
-                        break;
-                    case ALPHA:
-                        begin_token(&t, TOKEN_IDENTIFIER);
-                        str_buffer_append_char(&buffer, c);
-                        t.state = TOKENIZE_STATE_IDENTIFIER;
-                        break;
-                    case DIGIT:
-                        begin_token(&t, TOKEN_INT);
-                        str_buffer_append_char(&buffer, c);
-                        t.state = TOKENIZE_STATE_SAW_DIGIT;
-                        break;
-                    default:
-                        str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
-                        );
-                        tokenize_error(&t, str_buffer_str(&buffer));
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_CHAR:
-                switch (c) {
-                    case '\'':
-                        str_buffer_printf(
-                            &buffer, str_new("expected character")
-                        );
-                        tokenize_error(&t, str_buffer_str(&buffer));
-                        break;
-                    case '\\':
-                        t.state = TOKENIZE_STATE_STRING_ESCAPE;
-                        break;
-                    default:
-                        t.current_token->char_literal.c = c;
-                        t.state = TOKENIZE_STATE_CHAR_END;
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_CHAR_END:
-                switch (c) {
-                    case '\'':
-                        end_token(&t);
-                        t.state = TOKENIZE_STATE_START;
-                        break;
-                    default:
-                        str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
-                        );
-                        tokenize_error(&t, str_buffer_str(&buffer));
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_STRING:
-                switch (c) {
-                    case '"':
-                        t.current_token->string_literal.string =
-                            str_buffer_str(&buffer);
-                        str_buffer_reset(&buffer);
-                        end_token(&t);
-                        t.state = TOKENIZE_STATE_START;
-                        break;
-                    default:
-                        str_buffer_append_char(&buffer, c);
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_STRING_ESCAPE:
-                switch (c) {
-                    case 'n':
-                        handle_string_escape(&t, &buffer, '\n');
-                        break;
-                    case 'r':
-                        handle_string_escape(&t, &buffer, '\r');
-                        break;
-                    case '\\':
-                        handle_string_escape(&t, &buffer, '\\');
-                        break;
-                    case 't':
-                        handle_string_escape(&t, &buffer, '\t');
-                        break;
-                    case '\'':
-                        handle_string_escape(&t, &buffer, '\'');
-                        break;
-                    case '"':
-                        handle_string_escape(&t, &buffer, '"');
-                        break;
-                    default:
-                        str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
-                        );
-                        tokenize_error(&t, str_buffer_str(&buffer));
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_IDENTIFIER:
-                switch (c) {
-                    case SYMBOL_CHAR:
-                        str_buffer_append_char(&buffer, c);
-                        break;
-                    default:
-                        t.position -= 1;
-                        t.column -= 1;
-                        t.current_token->identifier.identifier =
-                            str_buffer_str(&buffer);
-                        str_buffer_reset(&buffer);
-                        end_token(&t);
-                        t.state = TOKENIZE_STATE_START;
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_SAW_DOT:
-                switch (c) {
-                    case '.':
-                        set_token_type(t.current_token, TOKEN_DOT_DOT);
-                        t.state = TOKENIZE_STATE_SAW_DOT_DOT;
-                        break;
-                    default:
-                        t.position -= 1;
-                        t.column -= 1;
-                        end_token(&t);
-                        t.state = TOKENIZE_STATE_START;
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_SAW_DOT_DOT:
-                switch (c) {
-                    case '.':
-                        set_token_type(t.current_token, TOKEN_DOT_DOT_DOT);
-                        end_token(&t);
-                        t.state = TOKENIZE_STATE_START;
-                        break;
-                    default:
-                        str_buffer_printf(
-                            &buffer, str_new("invalid character: '%c'"), c
-                        );
-                        tokenize_error(&t, str_buffer_str(&buffer));
-                        break;
-                }
-                break;
-            case TOKENIZE_STATE_SAW_DIGIT:
-                switch (c) {
-                    case DIGIT:
-                        str_buffer_append_char(&buffer, c);
-                        break;
-                    default:
-                        t.position -= 1;
-                        t.column -= 1;
-                        t.current_token->integer.integer =
-                            str_buffer_str(&buffer);
-                        str_buffer_reset(&buffer);
-                        end_token(&t);
-                        t.state = TOKENIZE_STATE_START;
-                        break;
-                }
-                break;
-        }
-        if (c == '\n') {
-            array_push(out->line_offsets, t.position + 1);
-            t.line += 1;
-            t.column = 0;
-        } else {
-            t.column += 1;
+static void
+append_buffer(struct lexer_t lexer[static 1], struct utf8char_t utf8_char) {
+    if (lexer->buffer_length + utf8_char.length >= lexer->buffer_size) {
+        do {
+            lexer->buffer_size *= 2;
+        } while (lexer->buffer_length + utf8_char.length >= lexer->buffer_size);
+        lexer->buffer = realloc(lexer->buffer, lexer->buffer_size);
+    }
+    memcpy(
+        lexer->buffer + lexer->buffer_length, &utf8_char.characters,
+        utf8_char.length
+    );
+    lexer->buffer_length += utf8_char.length;
+    lexer->buffer[lexer->buffer_length] = '\0';
+}
+
+static void
+update_line_number(
+    struct location_t location[static 1], struct codepoint_t cp
+) {
+    if (!cp.ok) {
+        return;
+    }
+    if (cp.character == '\n') {
+        location->line_number += 1;
+        location->column_number = 0;
+    } else if (cp.character == '\t') {
+        location->column_number += 4;
+    } else {
+        location->column_number += 1;
+    }
+}
+
+static struct codepoint_t
+next(
+    struct lexer_t lexer[static 1], struct location_t* location, bool is_buffer
+) {
+    struct codepoint_t character;
+    if (lexer->c[0].ok) {
+        character      = lexer->c[0];
+        lexer->c[0]    = lexer->c[1];
+        lexer->c[1].ok = false;
+    } else {
+        character = utf8_get(lexer->in);
+        update_line_number(&lexer->location, character);
+        if (!character.ok && !feof(lexer->in)) {
+            error(lexer->location, "Invalid UTF-8 character");
         }
     }
-    // End of file
-    switch (t.state) {
-        case TOKENIZE_STATE_START:
-        case TOKENIZE_STATE_ERROR:
+
+    if (location != nullptr) {
+        *location = lexer->location;
+        for (i32 i = 0; i < 2 && lexer->c[i].ok; ++i) {
+            update_line_number(&lexer->location, lexer->c[i]);
+        }
+    }
+
+    if (!character.ok || !is_buffer) {
+        return character;
+    }
+    struct utf8char_t encode_result = utf8_encode(character);
+    append_buffer(lexer, encode_result);
+    return character;
+}
+
+static bool
+is_whitespace(u8 c) {
+    switch (c) {
+        case '\t':
+        case '\n':
+        case '\r':
+        case ' ':
+            return true;
+    }
+    return false;
+}
+
+static struct codepoint_t
+wgetc(struct lexer_t lexer[static 1], struct location_t* location) {
+    struct codepoint_t cp;
+    do {
+        cp = next(lexer, location, false);
+    } while (cp.ok && is_whitespace(cp.character));
+    return cp;
+}
+
+static void
+consume(struct lexer_t lexer[static 1], size n) {
+    for (size i = 0; i < n; i += 1) {
+        while ((lexer->buffer[--lexer->buffer_length] & 0xC0) == 0x80)
+            ;
+    }
+    lexer->buffer[lexer->buffer_length] = 0;
+}
+
+static void
+push(struct lexer_t lexer[static 1], u32 character, bool is_buffer) {
+    assert(!lexer->c[1].ok);
+    lexer->c[1]           = lexer->c[0];
+    lexer->c[0].character = character;
+    lexer->c[0].ok        = true;
+    if (is_buffer) {
+        consume(lexer, 1);
+    }
+}
+
+static void
+lex_number(struct lexer_t lexer[static 1], struct token_t out[static 1]) {
+    struct codepoint_t cp = next(lexer, &out->location, true);
+    u32 character         = cp.character;
+    assert(cp.ok && character <= 0x7F && isdigit(character));
+
+    static char const* chars = "0123456789";
+
+    do {
+        character = cp.character;
+        if (strchr(chars, character)) {
+            continue;
+        } else {
             break;
-        case TOKENIZE_STATE_CHAR:
-        case TOKENIZE_STATE_CHAR_END:
-            str_buffer_printf(
-                &buffer, str_new("unterminated character literal")
-            );
-            tokenize_error(&t, str_buffer_str(&buffer));
+        }
+    } while ((cp = next(lexer, nullptr, true)).ok);
+    push(lexer, character, true);
+
+    out->integer = strtoumax(lexer->buffer, nullptr, 10);
+
+    out->type = TOKEN_INTEGER;
+    lexer_clear_buffer(lexer);
+}
+
+static void
+lex_name(struct lexer_t lexer[static 1], struct token_t out[static 1]) {
+    struct codepoint_t cp = next(lexer, &out->location, true);
+    u32 character         = cp.character;
+    assert(cp.ok && character <= 0x7F && isalpha(character));
+    while (cp.ok) {
+        cp        = next(lexer, &out->location, true);
+        character = cp.character;
+        if (character > 0x7F || (!isalnum(character) && character != '_')) {
+            push(lexer, character, true);
             break;
-        case TOKENIZE_STATE_STRING_ESCAPE:
-            if (t.current_token->type == TOKEN_STRING_LITERAL) {
-                str_buffer_printf(&buffer, str_new("unterminated string"));
-                tokenize_error(&t, str_buffer_str(&buffer));
-            } else if (t.current_token->type == TOKEN_CHAR_LITERAL) {
-                str_buffer_printf(
-                    &buffer, str_new("unterminated character literal")
-                );
-                tokenize_error(&t, str_buffer_str(&buffer));
-            } else {
-                vix_unreachable();
+        }
+    }
+
+    out->type = TOKEN_NAME;
+    out->name = strdup(lexer->buffer);
+    lexer_clear_buffer(lexer);
+}
+
+static struct utf8char_t
+lex_rune(struct lexer_t lexer[static 1]) {
+    struct codepoint_t cp = next(lexer, nullptr, false);
+    u32 character         = cp.character;
+    assert(cp.ok);
+
+    switch (character) {
+        case '\\': {
+            struct location_t location = lexer->location;
+            character                  = next(lexer, nullptr, false).character;
+            switch (character) {
+                case '0':
+                    return (struct utf8char_t){
+                        .characters = { '\0' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case 'a':
+                    return (struct utf8char_t){
+                        .characters = { '\0' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case 'b':
+                    return (struct utf8char_t){
+                        .characters = { '\b' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case 'r':
+                    return (struct utf8char_t){
+                        .characters = { '\r' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case 't':
+                    return (struct utf8char_t){
+                        .characters = { '\t' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case 'n':
+                    return (struct utf8char_t){
+                        .characters = { '\n' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case 'f':
+                    return (struct utf8char_t){
+                        .characters = { '\f' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case 'v':
+                    return (struct utf8char_t){
+                        .characters = { '\v' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case '\\':
+                    return (struct utf8char_t){
+                        .characters = { '\\' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case '\'':
+                    return (struct utf8char_t){
+                        .characters = { '\'' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                case '"':
+                    return (struct utf8char_t){
+                        .characters = { '\"' },
+                        .length     = 1,
+                        .ok         = true,
+                    };
+                default:
+                    error(location, "Invalid escape '\\%c'", character);
+            }
+            vix_unreachable();
+        }
+        default:
+            return utf8_encode(cp); // TODO
+    }
+}
+
+static void
+lex_string(struct lexer_t lexer[static 1], struct token_t out[static 1]) {
+    struct codepoint_t cp = next(lexer, &out->location, true);
+    u32 character         = cp.character;
+    u32 delimiter;
+
+    switch (character) {
+        case '"':
+            delimiter = character;
+            cp        = next(lexer, nullptr, false);
+            character = cp.character;
+            while (character != delimiter) {
+                if (!cp.ok) {
+                    error(lexer->location, "Unexpected end of file");
+                }
+                push(lexer, character, false);
+                if (delimiter == '"') {
+                    struct utf8char_t utf8 = lex_rune(lexer);
+                    append_buffer(lexer, utf8);
+                } else {
+                    next(lexer, nullptr, true);
+                }
+                cp        = next(lexer, nullptr, false);
+                character = cp.character;
+            }
+            char* str = calloc(lexer->buffer_length + 1, 1);
+            memcpy(str, lexer->buffer, lexer->buffer_length);
+            out->type          = TOKEN_STRING;
+            out->string.length = lexer->buffer_length;
+            out->string.value  = str;
+            lexer_clear_buffer(lexer);
+            return;
+        default:
+            vix_unreachable();
+    }
+    vix_unreachable();
+
+    lexer_clear_buffer(lexer);
+}
+
+enum lex_token_type_e
+lex(struct lexer_t lexer[static 1], struct token_t out[static 1]) {
+    if (lexer->un.type != TOKEN_NONE) {
+        *out           = lexer->un;
+        lexer->un.type = TOKEN_NONE;
+        return out->type;
+    }
+    struct codepoint_t cp = wgetc(lexer, &out->location);
+    if (!cp.ok) {
+        out->type = TOKEN_EOF;
+        return out->type;
+    }
+    u32 character = cp.character;
+
+    if (character <= 0x7F && isdigit(character)) {
+        push(lexer, character, false);
+        lex_number(lexer, out);
+        return TOKEN_INTEGER;
+    }
+
+    if (character <= 0x7F && isalpha(character)) {
+        push(lexer, character, false);
+        lex_name(lexer, out);
+        return TOKEN_NAME;
+    }
+
+    switch (character) {
+        case '"':
+            push(lexer, character, false);
+            lex_string(lexer, out);
+            return TOKEN_STRING;
+            break;
+        case '.':
+            switch ((character = next(lexer, nullptr, false).character)) {
+                case '.':
+                    switch ((character = next(lexer, nullptr, false).character)
+                    ) {
+                        case '.':
+                            out->type = TOKEN_DOT;
+                            break;
+                        default:
+                            error(lexer->location, "Unknown sequence '..'");
+                    }
+                    break;
+                default:
+                    push(lexer, character, false);
+                    out->type = TOKEN_DOT;
+                    break;
             }
             break;
-        case TOKENIZE_STATE_STRING:
-            str_buffer_printf(&buffer, str_new("unterminated string"));
-            tokenize_error(&t, str_buffer_str(&buffer));
+        case '=':
+            out->type = TOKEN_ASSIGN;
             break;
-        case TOKENIZE_STATE_IDENTIFIER:
-        case TOKENIZE_STATE_SAW_DIGIT:
-        case TOKENIZE_STATE_SAW_DOT:
-        case TOKENIZE_STATE_SAW_DOT_DOT:
-            end_token(&t);
+        case ',':
+            out->type = TOKEN_COMMA;
             break;
+        case '{':
+            out->type = TOKEN_OPEN_BRACE;
+            break;
+        case '}':
+            out->type = TOKEN_CLOSE_BRACE;
+            break;
+        case '(':
+            out->type = TOKEN_OPEN_PAREN;
+            break;
+        case ')':
+            out->type = TOKEN_CLOSE_PAREN;
+            break;
+        case '>':
+            out->type = TOKEN_GREATER_THAN;
+            break;
+        case ';':
+            out->type = TOKEN_SEMICOLON;
+            break;
+        default:
+            error(lexer->location, "Unexpected character '%d'", character);
     }
 
-    if (t.state != TOKENIZE_STATE_ERROR) {
-        if (array_header(*t.tokens)->length > 0) {
-            Token* last_token = array_last(*t.tokens);
-            t.line            = last_token->start_line;
-            t.column          = last_token->start_column;
-            t.position        = last_token->start_position;
-        } else {
-            t.position = 0;
-        }
-        begin_token(&t, TOKEN_EOF);
-        end_token(&t);
-        assert(!t.current_token);
-    }
+    return out->type;
 }
 
-Str token_name(TokenType type) {
-    switch (type) {
-        case TOKEN_INT:
-            return str_new("Integer");
-        case TOKEN_STRING_LITERAL:
-            return str_new("StringLiteral");
-        case TOKEN_IDENTIFIER:
-            return str_new("Identifier");
-        case TOKEN_EOF:
-            return str_new("EOF");
-        case TOKEN_ASSIGN:
-            return str_new("=");
-        case TOKEN_SEMICOLON:
-            return str_new(";");
-        case TOKEN_DOT:
-            return str_new(".");
-        case TOKEN_DOT_DOT:
-            return str_new("..");
-        case TOKEN_DOT_DOT_DOT:
-            return str_new("...");
-        case TOKEN_COMMA:
-            return str_new(",");
-        case TOKEN_OPEN_BRACE:
-            return str_new("{");
-        case TOKEN_CLOSE_BRACE:
-            return str_new("}");
-        case TOKEN_OPEN_PAREN:
-            return str_new("(");
-        case TOKEN_CLOSE_PAREN:
-            return str_new(")");
-        case TOKEN_GREATER_THAN:
-            return str_new(">");
-        case TOKEN_CHAR_LITERAL:
-            return str_new("CharLiteral");
-    }
-    return str_new("(invalid token)");
+void
+unlex(struct lexer_t lexer[static 1], struct token_t out[static 1]) {
+    assert(lexer->un.type == TOKEN_NONE);
+    lexer->un = *out;
 }
 
-void print_tokens(Str source, Token** tokens) {
-    for (i64 i = 0; i < array_header(tokens)->length; ++i) {
-        Token* token = tokens[i];
-        printf("%ld "str_fmt" ", i, str_args(token_name(token->type)));
-        if (token->start_position != __SIZE_MAX__) {
-            fwrite(
-                source.data + token->start_position, sizeof(char),
-                token->end_position - token->start_position, stdout
-            );
-        }
-        printf("\n");
+void
+token_finish(struct token_t token[static 1]) {
+    switch (token->type) {
+        case TOKEN_STRING:
+            free(token->string.value);
+            break;
+        default:
+            break;
     }
+    token->type     = TOKEN_NONE;
+    token->location = (struct location_t){};
 }

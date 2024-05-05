@@ -12,22 +12,15 @@
         pkgs = nixpkgs.legacyPackages."${system}";
 
         buildInputs = with pkgs; [
-          cmake
+          gnumake
           clang-tools
           gdb
           valgrind
           nasm
-          zlib
-          libxml2
           asm-lsp
           asmfmt
-        ] ++ (with llvmPackages_17; [
-          libclang
-          clang-unwrapped
-          clang
-          lld
-          llvm
-        ]);
+          qbe
+        ];
       in
       rec {
         # `nix develop`

@@ -1,103 +1,50 @@
 #pragma once
 
-#include "defs.h"
-#include "error_message.h"
 #include "lexer.h"
 
-typedef enum {
-    NODE_TYPE_STRING_LITERAL,
-    NODE_TYPE_CHAR_LITERAL,
-    NODE_TYPE_INTEGER,
-    NODE_TYPE_OBJECT,
-    NODE_TYPE_PROPERTY,
-    NODE_TYPE_IDENTIFIER,
-    NODE_TYPE_FREE_OBJECT_COPY_PARAMS,
-    NODE_TYPE_OBJECT_COPY,
-    NODE_TYPE_DECORATOR,
-    NODE_TYPE_ROOT
-} NodeType;
+struct ast_free_property_t {
+    char* name;
+    struct ast_free_property_t* next;
+};
 
-typedef struct AstNode AstNode;
+struct ast_property_t;
+struct ast_object_copy_t;
 
-typedef struct {
-    Str content;
-} AstStringLiteral;
+enum object_type_e {
+    OBJECT_TYPE_NONE,
+    OBJECT_TYPE_OBJECT_COPY,
+    OBJECT_TYPE_PROPERTIES,
+    OBJECT_TYPE_INTEGER,
+    OBJECT_TYPE_STRING
+};
 
-typedef struct {
-    u8 c;
-} AstCharLiteral;
-
-typedef struct {
-    Str content;
-} AstInteger;
-
-typedef struct {
-    Str content;
-} AstIdentifier;
-
-typedef struct {
-    AstNode** free_list;
-    AstNode** property_list;
-    AstNode* object_copy;
-} AstObject;
-
-typedef struct {
-    AstNode* identifier;
-    AstNode* property_value;
-} AstProperty;
-
-typedef struct {
-    AstNode* identifier;
-    AstNode** free_object_copies;
-    AstNode* object_copy;
-} AstObjectCopy;
-
-typedef struct {
-    AstNode** parameter_list;
-} AstFreeObjectCopyParams;
-
-typedef struct {
-    AstNode* object;
-} AstDecorator;
-
-typedef struct {
-    AstNode** list;
-} AstRoot;
-
-typedef struct {
-    AstNode* root;
-    Str path;
-    Str source_code;
-    i64* line_offsets;
-} ImportTableEntry;
-
-struct AstNode {
-    i64 id;
-    NodeType const type;
-    AstNode* parent;
-    i64 const line;
-    i64 const column;
-    ImportTableEntry* owner;
+struct ast_object_t {
+    enum object_type_e type;
+    struct ast_free_property_t* free_properties;
     union {
-        AstStringLiteral string_literal;
-        AstCharLiteral char_literal;
-        AstInteger integer;
-        AstObject object;
-        AstProperty property;
-        AstIdentifier identifier;
-        AstObjectCopy object_copy;
-        AstFreeObjectCopyParams free_object_copy_params;
-        AstDecorator decorator;
-        AstRoot root;
+        struct ast_object_copy_t* object_copy;
+        struct ast_property_t* properties;
+        i32 integer;
+        char* string;
     };
 };
 
-void ast_visit_node_children(
-    AstNode node[static 1], void (*visit)(AstNode*, void* context),
-    void* context
-);
-AstNode* ast_parse(
-    Allocator allocator[static 1], Str source,
-    TokenPtrArray tokens[static 1], ImportTableEntry owner[static 1],
-    ErrorColor error_color
-);
+struct ast_free_property_assign_t {
+    struct ast_object_t* value;
+    struct ast_free_property_assign_t* next;
+};
+
+struct ast_object_copy_t {
+    char* name;
+    struct ast_free_property_assign_t* free_properties;
+    struct ast_object_copy_t* next;
+};
+
+struct ast_property_t {
+    char* name;
+    struct ast_object_t* object;
+    struct ast_property_t* next;
+};
+
+struct ast_object_t* parse(struct lexer_t lexer[static 1]);
+void print_object(struct ast_object_t* object, i32 indent);

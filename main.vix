@@ -4,6 +4,8 @@ true = {
 	};
 };
 
+false = whenTrue whenFalse > whenFalse.d;
+
 a = {
 	b = {
 		c = 5;
@@ -13,4 +15,4 @@ a = {
 	d = b.d;
 };
 
-main = true.if(3, 5).result;
+main = true.if(2, 4, 8).result;
