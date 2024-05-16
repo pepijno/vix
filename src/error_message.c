@@ -51,10 +51,10 @@ static void
 print_error_message_type(
     ErrorMessage error_message[static 1], ErrorColor color, ErrorType error_type
 ) {
-    char* path = error_message->path;
-    i32 line   = error_message->line_start + 1;
-    i32 col    = error_message->column_start + 1;
-    char* text = error_message->message;
+    char const* path = error_message->path;
+    i32 line         = error_message->line_start + 1;
+    i32 col          = error_message->column_start + 1;
+    char const* text = error_message->message;
 
     bool is_tty = isatty(STDERR_FILENO) != 0;
     if (color == ERROR_COLOR_ON || (color == ERROR_COLOR_AUTO && is_tty)) {
@@ -126,6 +126,8 @@ error_message_create_with_line(
     char* path, i32 line, i32 column, char* source, i32* line_offsets,
     char* message
 ) {
+    (void) source;
+    (void) line_offsets;
     ErrorMessage error_message = {
         .path         = path,
         .line_start   = line,
@@ -134,14 +136,14 @@ error_message_create_with_line(
         .next         = nullptr,
     };
 
-    i32 line_start_offset = line_offsets[line];
-    i32 end_line          = line + 1;
-    i32 line_end_offset   = line_offsets[line + 1];
-    i32 length            = (line_end_offset + 1 > line_start_offset)
-                              ? (line_end_offset - line_start_offset - 1)
-                              : 0;
+    // i32 line_start_offset = line_offsets[line];
+    // // i32 end_line          = line + 1;
+    // i32 line_end_offset = line_offsets[line + 1];
+    // i32 length          = (line_end_offset + 1 > line_start_offset)
+    //                         ? (line_end_offset - line_start_offset - 1)
+    //                         : 0;
 
-    memcpy(error_message.line_buffer, source + line_start_offset, length);
+    // memcpy(error_message.line_buffer, source + line_start_offset, length);
 
     return error_message;
 }

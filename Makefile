@@ -3,32 +3,35 @@
 GREEN := $(shell tput -Txterm setaf 2)
 RESET := $(shell tput -Txterm sgr0)
 
+TARGET := vix
 BINDIR := ./bin
-CC := gcc
+SRCDIR := ./src
+DEPDIR := ./.deps
+OBJDIR := ./.objs
 
+CC := gcc
 CFLAGS := -g -std=c2x -Wall -Wextra -Werror -Wpedantic
 
-objects := \
-	src/analyser.o \
-	src/generator.o \
-	src/lexer.o \
-	src/main.o \
-	src/parser.o \
-	src/utf8.o \
-	src/util.o
+SOURCES := $(wildcard $(SRCDIR)/*.c)
+OBJECTS := $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
+DEPENDS := $(patsubst $(SRCDIR)/%.c,$(DEPDIR)/%.d,$(SOURCES))
 
 .PHONY: all
-all: $(BINDIR)/vix
+all: $(BINDIR)/$(TARGET)
 
-$(BINDIR)/vix: $(objects)
-	@mkdir -p -- $(BINDIR)
-	@printf '[$(GREEN)LD$(RESET)]\t%s\n' '$(CC) -o $@ $(objects)'
-	@$(CC) -o $@ $(objects)
+$(BINDIR)/$(TARGET): $(OBJECTS) | $(BINDIR)
+	@printf '[$(GREEN)LD$(RESET)]\t%s\n' '$@'
+	@$(CC) $(CFLAGS) $^ -o $@
 
-.c.o:
-	@printf '[$(GREEN)CC$(RESET)]\t%s\n' '$(CC) $(CFLAGS) -c -o $@ $<'
-	@$(CC) $(CFLAGS) -c -o $@ $<
+-include $(DEPENDS)
+
+$(OBJDIR)/%.o : $(SRCDIR)/%.c Makefile | $(DEPDIR) $(OBJDIR)
+	@printf '[$(GREEN)CC$(RESET)]\t%s\n' $<
+	@$(CC) $(CFLAGS) -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d -c -o $@ $<
+
+$(BINDIR) $(DEPDIR) $(OBJDIR):
+	@mkdir -p $@
 
 .PHONY: clean
 clean:
-	@rm -rf -- $(BINDIR) $(objects)
+	@rm -rf -- $(BINDIR) $(OBJDIR) $(DEPDIR)
