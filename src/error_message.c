@@ -4,21 +4,20 @@
 
 #include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
 #include <unistd.h>
 
-typedef enum {
+enum error_type {
     ERROR_TYPE_ERROR,
     ERROR_TYPE_NOTE
-} ErrorType;
+};
 
-typedef enum {
+enum term_color {
     TERM_COLOR_RED,
     TERM_COLOR_GREEN,
     TERM_COLOR_CYAN,
     TERM_COLOR_WHITE,
     TERM_COLOR_RESET
-} TermColor;
+};
 
 #define VT_RED   "\x1b[31;1m"
 #define VT_GREEN "\x1b[32;1m"
@@ -27,7 +26,7 @@ typedef enum {
 #define VT_RESET "\x1b[0m"
 
 static void
-set_color_posix(TermColor color) {
+set_color_posix(enum term_color color) {
     switch (color) {
         case TERM_COLOR_RED:
             fprintf(stderr, VT_RED);
@@ -49,7 +48,7 @@ set_color_posix(TermColor color) {
 
 static void
 print_error_message_type(
-    ErrorMessage error_message[static 1], ErrorColor color, ErrorType error_type
+    struct error_message error_message[static 1], enum error_color color, enum error_type error_type
 ) {
     char const* path = error_message->path;
     i32 line         = error_message->line_start + 1;
@@ -98,7 +97,7 @@ print_error_message_type(
         }
     }
 
-    ErrorMessage* next = error_message;
+    struct error_message* next = error_message;
     while (next) {
         print_error_message_type(next, color, ERROR_TYPE_NOTE);
         next = next->next;
@@ -106,29 +105,29 @@ print_error_message_type(
 }
 
 void
-print_error_message(ErrorMessage error_message[static 1], ErrorColor color) {
+print_error_message(struct error_message error_message[static 1], enum error_color color) {
     print_error_message_type(error_message, color, ERROR_TYPE_ERROR);
 }
 
 void
 error_message_add_note(
-    ErrorMessage parent[static 1], ErrorMessage note[static 1]
+    struct error_message parent[static 1], struct error_message note[static 1]
 ) {
-    ErrorMessage** next = &parent->next;
+    struct error_message** next = &parent->next;
     while (next) {
         next = &(*next)->next;
     }
     *next = note;
 }
 
-ErrorMessage
+struct error_message
 error_message_create_with_line(
     char* path, i32 line, i32 column, char* source, i32* line_offsets,
     char* message
 ) {
     (void) source;
     (void) line_offsets;
-    ErrorMessage error_message = {
+    struct error_message error_message = {
         .path         = path,
         .line_start   = line,
         .column_start = column,

@@ -7,20 +7,20 @@ static u8 const utf8_length[]
 
 #define utf8length(byte) utf8_length[(byte) >> 4]
 
-struct utf8char_t
-utf8_encode(struct codepoint_t point) {
+struct utf8char
+utf8_encode(struct codepoint point) {
     if (!point.ok) {
         return UTF8_INVALID;
     }
     u32 cp = point.character;
     if (cp < 0x80) {
-        return (struct utf8char_t){
+        return (struct utf8char){
             .characters = { cp },
             .length     = 1,
             .ok         = true,
         };
     } else if (cp < 0x800) {
-        return (struct utf8char_t){
+        return (struct utf8char){
             .characters =
                 {
                              0xC0 | (cp >> 6),
@@ -30,7 +30,7 @@ utf8_encode(struct codepoint_t point) {
             .ok     = true,
         };
     } else if (cp < 0x10000) {
-        return (struct utf8char_t){
+        return (struct utf8char){
             .characters =
                 {
                              0xE0 | (cp >> 12),
@@ -41,7 +41,7 @@ utf8_encode(struct codepoint_t point) {
             .ok     = true,
         };
     } else if (cp < 110000) {
-        return (struct utf8char_t){
+        return (struct utf8char){
             .characters =
                 {
                              0xF0 | (cp >> 18),
@@ -57,9 +57,9 @@ utf8_encode(struct codepoint_t point) {
     }
 }
 
-struct codepoint_t
-utf8_decode(struct utf8char_t utf8_char) {
-    struct codepoint_t cp = {
+struct codepoint
+utf8_decode(struct utf8char utf8_char) {
+    struct codepoint cp = {
         .ok = true,
     };
     if (!utf8_char.ok) {
@@ -92,12 +92,12 @@ utf8_decode(struct utf8char_t utf8_char) {
     return cp;
 }
 
-struct codepoint_t
+struct codepoint
 utf8_get(FILE* f) {
     if (feof(f)) {
         return CODEPOINT_INVALID;
     }
-    struct utf8char_t utf8 = {
+    struct utf8char utf8 = {
         .ok = true,
     };
     utf8.characters[0] = fgetc(f);

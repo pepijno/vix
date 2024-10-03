@@ -1,6 +1,5 @@
 #include "util.h"
 
-#include <assert.h>
 #include <stdarg.h>
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -26,64 +25,6 @@ vix_panic(char* format, ...) {
 noreturn void
 vix_unreachable(void) {
     vix_panic("unreachable");
-}
-
-void*
-array_reallocate(void* buffer, i64 length, i64 element_size) {
-    return realloc(buffer, length * element_size);
-}
-
-void*
-xarray_reallocate(void* buffer, i64 length, i64 element_size) {
-    buffer = realloc(buffer, length * element_size);
-    if (buffer == nullptr && length != 0 && element_size != 0) {
-        vix_panic("array_reallocate:");
-    }
-    return buffer;
-}
-
-void*
-xmalloc(i64 length) {
-    void* buffer = malloc(length);
-    if (buffer == nullptr && length != 0) {
-        vix_panic("malloc:");
-    }
-    return buffer;
-}
-
-void*
-array_add(struct Array array[static 1], i64 length) {
-    if (array->capacity - array->length < length) {
-        do {
-            array->capacity = array->capacity != 0 ? array->capacity * 2 : 8;
-        } while (array->capacity - array->length < length);
-        array->data = realloc(array->data, array->capacity);
-        if (array->data == nullptr) {
-            vix_panic("realloc");
-        }
-    }
-    void* v = (u8*) array->data + array->length;
-    array->length += length;
-    return v;
-}
-
-void
-array_add_ptr(struct Array array[static 1], void* value) {
-    *(void**) array_add(array, sizeof(value)) = value;
-}
-
-void
-array_add_buffer(struct Array array[static 1], void const* buffer, i64 length) {
-    memcpy(array_add(array, length), buffer, length);
-}
-
-void*
-array_last(struct Array array[static 1], i64 length) {
-    if (array->length == 0) {
-        return nullptr;
-    }
-    assert(length <= array->length);
-    return (u8*) array->data + array->length - length;
 }
 
 static i32
@@ -138,7 +79,7 @@ getline(char** lineptr, i32* n, FILE* stream) {
 }
 
 void
-error_line(struct location_t location) {
+error_line(struct location location) {
     char const* path = sources[location.file];
     struct stat filestat;
     if (stat((char*) path, &filestat) == -1 || !S_ISREG(filestat.st_mode)) {

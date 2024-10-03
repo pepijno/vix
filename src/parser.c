@@ -6,9 +6,11 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 
+static i32 id = 0;
+
 static noreturn void
-vsynerror(struct token_t token[static 1], va_list ap) {
-    enum lex_token_type_e type = va_arg(ap, enum lex_token_type_e);
+vsynerror(struct token token[static 1], va_list ap) {
+    enum lex_token_type type = va_arg(ap, enum lex_token_type);
 
     fprintf(
         stderr, "%s:%d:%d: syntax error: expected ",
@@ -23,7 +25,7 @@ vsynerror(struct token_t token[static 1], va_list ap) {
             fprintf(stderr, "'%s'", token_names[type]);
         }
 
-        type = va_arg(ap, enum lex_token_type_e);
+        type = va_arg(ap, enum lex_token_type);
         fprintf(stderr, ", ");
     }
 
@@ -33,7 +35,7 @@ vsynerror(struct token_t token[static 1], va_list ap) {
 }
 
 static noreturn void
-synerror(struct token_t token[static 1], ...) {
+synerror(struct token token[static 1], ...) {
     va_list ap;
     va_start(ap, token);
     vsynerror(token, ap);
@@ -41,7 +43,7 @@ synerror(struct token_t token[static 1], ...) {
 }
 
 static void
-synassert(bool condition, struct token_t token[static 1], ...) {
+synassert(bool condition, struct token token[static 1], ...) {
     if (!condition) {
         va_list ap;
         va_start(ap, token);
@@ -52,11 +54,11 @@ synassert(bool condition, struct token_t token[static 1], ...) {
 
 static void
 expect_token(
-    struct lexer_t lexer[static 1], enum lex_token_type_e token_type,
-    struct token_t* token
+    struct lexer lexer[static 1], enum lex_token_type token_type,
+    struct token* token
 ) {
-    struct token_t _token = {};
-    struct token_t* out   = token != nullptr ? token : &_token;
+    struct token _token = {};
+    struct token* out   = token != nullptr ? token : &_token;
     lex(lexer, out);
     synassert(out->type == token_type, out, token_type, TOKEN_EOF);
     if (token == nullptr) {
@@ -66,17 +68,17 @@ expect_token(
 
 static void
 parse_free_properties(
-    struct lexer_t lexer[static 1],
-    struct ast_free_property_t free_property[static 1]
+    struct lexer lexer[static 1],
+    struct ast_free_property free_property[static 1]
 ) {
-    free_property->next  = malloc(sizeof(struct ast_free_property_t));
-    struct token_t token = {};
-    struct ast_free_property_t** next = &free_property->next;
+    free_property->next  = calloc(1, sizeof(struct ast_free_property));
+    struct token token = {};
+    struct ast_free_property** next = &free_property->next;
     while (true) {
         switch (lex(lexer, &token)) {
             case TOKEN_NAME:
                 (*next)->name = token.name;
-                (*next)->next = malloc(sizeof(struct ast_free_property_t));
+                (*next)->next = calloc(1, sizeof(struct ast_free_property));
                 next          = &(*next)->next;
                 break;
             case TOKEN_GREATER_THAN:
@@ -91,41 +93,43 @@ parse_free_properties(
     vix_unreachable();
 }
 
-static struct ast_object_t* parse_object(struct lexer_t lexer[static 1]);
+static struct ast_object* parse_object(struct lexer lexer[static 1], struct ast_object* parent);
 
 static void
 parse_object_copies(
-    struct lexer_t lexer[static 1],
-    struct ast_object_copy_t object_copy[static 1]
+    struct lexer lexer[static 1],
+    struct ast_object_copy object_copy[static 1],
+    struct ast_object* parent
 ) {
-    struct ast_object_copy_t** next = &object_copy;
-    struct token_t token            = {};
-    while (true) {
+    struct ast_object_copy** next = &object_copy;
+    struct token token            = {};
+    bool cont = true;
+    while (cont) {
         switch (lex(lexer, &token)) {
             case TOKEN_DOT: {
-                (*next)->next = malloc(sizeof(struct ast_object_copy_t));
+                (*next)->next = calloc(1, sizeof(struct ast_object_copy));
                 next          = &(*next)->next;
-                struct token_t token2 = {};
+                struct token token2 = {};
                 expect_token(lexer, TOKEN_NAME, &token2);
                 (*next)->name = token2.name;
                 break;
             }
             case TOKEN_OPEN_PAREN: {
                 (*next)->free_properties
-                    = malloc(sizeof(struct ast_free_property_assign_t));
-                struct ast_free_property_assign_t** next_free_property_assign
+                    = calloc(1, sizeof(struct ast_free_property_assign));
+                struct ast_free_property_assign** next_free_property_assign
                     = &(*next)->free_properties;
-                struct token_t token2      = {};
-                enum lex_token_type_e type = lex(lexer, &token2);
+                struct token token2      = {};
+                enum lex_token_type type = lex(lexer, &token2);
                 if (type == TOKEN_CLOSE_PAREN) {
                     free(*next_free_property_assign);
                     *next_free_property_assign = nullptr;
                     break;
                 } else {
                     unlex(lexer, &token2);
-                    (*next_free_property_assign)->value = parse_object(lexer);
+                    (*next_free_property_assign)->value = parse_object(lexer, parent);
                     (*next_free_property_assign)->next
-                        = malloc(sizeof(struct ast_free_property_assign_t));
+                        = calloc(1, sizeof(struct ast_free_property_assign));
                     next_free_property_assign
                         = &(*next_free_property_assign)->next;
                 }
@@ -139,9 +143,9 @@ parse_object_copies(
                             break;
                         case TOKEN_COMMA:
                             (*next_free_property_assign)->value
-                                = parse_object(lexer);
-                            (*next_free_property_assign)->next = malloc(
-                                sizeof(struct ast_free_property_assign_t)
+                                = parse_object(lexer, parent);
+                            (*next_free_property_assign)->next = calloc(1, 
+                                sizeof(struct ast_free_property_assign)
                             );
                             next_free_property_assign
                                 = &(*next_free_property_assign)->next;
@@ -160,51 +164,58 @@ parse_object_copies(
                 return;
             }
             default: {
-                synerror(
-                    &token, TOKEN_DOT, TOKEN_OPEN_PAREN, TOKEN_SEMICOLON,
-                    TOKEN_EOF
-                );
+                unlex(lexer, &token);
+                cont = false;
+                break;
+                // synerror(
+                //     &token, TOKEN_DOT, TOKEN_OPEN_PAREN, TOKEN_SEMICOLON,
+                //     TOKEN_EOF
+                // );
             }
         }
     }
 }
 
-static struct ast_property_t* parse_property(struct lexer_t lexer[static 1]);
+static struct ast_property* parse_property(struct lexer lexer[static 1], struct ast_object* parent);
 
 // object ::= (identifier+ ">")? (("{" (property)* "}") | object_copy |
 // primitive)
-static struct ast_object_t*
-parse_object(struct lexer_t lexer[static 1]) {
-    struct token_t token        = {};
-    struct ast_object_t* object = malloc(sizeof(struct ast_object_t));
+static struct ast_object*
+parse_object(struct lexer lexer[static 1], struct ast_object* parent) {
+    struct token token        = {};
+    struct ast_object* object = calloc(1, sizeof(struct ast_object));
+    object->id                  = id;
+    id += 1;
+    object->parent = parent;
 
     switch (lex(lexer, &token)) {
         case TOKEN_NAME: {
             // name can mean both identifiers or object copy
-            struct token_t token2 = {};
-            switch (lex(lexer, &token2)) {
+            struct token token2 = {};
+            enum lex_token_type t = lex(lexer, &token2);
+            switch (t) {
                 case TOKEN_NAME: { // more than one free property
                     unlex(lexer, &token2);
                     object->free_properties
-                        = malloc(sizeof(struct ast_free_property_t));
+                        = calloc(1, sizeof(struct ast_free_property));
                     object->free_properties->name = token.name;
                     parse_free_properties(lexer, object->free_properties);
                     break;
                 }
                 case TOKEN_GREATER_THAN: { // only one free property
                     object->free_properties
-                        = malloc(sizeof(struct ast_free_property_t));
+                        = calloc(1, sizeof(struct ast_free_property));
                     object->free_properties->name = token.name;
                     break;
                 }
                 default: { // object copy
                     object->type = OBJECT_TYPE_OBJECT_COPY;
                     unlex(lexer, &token2);
-                    struct ast_object_copy_t* object_copy
-                        = malloc(sizeof(struct ast_object_copy_t));
+                    struct ast_object_copy* object_copy
+                        = calloc(1, sizeof(struct ast_object_copy));
                     object->object_copy = object_copy;
                     object_copy->name   = token.name;
-                    parse_object_copies(lexer, object_copy);
+                    parse_object_copies(lexer, object_copy, object);
                     break;
                 }
             }
@@ -220,18 +231,18 @@ parse_object(struct lexer_t lexer[static 1]) {
     switch (lex(lexer, &token)) {
         case TOKEN_NAME:
             object->type = OBJECT_TYPE_OBJECT_COPY;
-            struct ast_object_copy_t* object_copy
-                = malloc(sizeof(struct ast_object_copy_t));
+            struct ast_object_copy* object_copy
+                = calloc(1, sizeof(struct ast_object_copy));
             object->object_copy = object_copy;
             object_copy->name   = token.name;
-            parse_object_copies(lexer, object_copy);
+            parse_object_copies(lexer, object_copy, object);
             break;
             break;
         case TOKEN_OPEN_BRACE: {
             object->type          = OBJECT_TYPE_PROPERTIES;
-            struct token_t token2 = {};
-            object->properties    = malloc(sizeof(struct ast_property_t));
-            struct ast_property_t** next_property = &object->properties;
+            struct token token2 = {};
+            object->properties    = calloc(1, sizeof(struct ast_property));
+            struct ast_property** next_property = &object->properties;
             bool break_out                        = false;
             while (!break_out) {
                 switch (lex(lexer, &token2)) {
@@ -242,9 +253,9 @@ parse_object(struct lexer_t lexer[static 1]) {
                         break;
                     default:
                         unlex(lexer, &token2);
-                        *next_property = parse_property(lexer);
+                        *next_property = parse_property(lexer, object);
                         (*next_property)->next
-                            = malloc(sizeof(struct ast_property_t));
+                            = calloc(1, sizeof(struct ast_property));
                         next_property = &(*next_property)->next;
                         break;
                 }
@@ -268,49 +279,51 @@ parse_object(struct lexer_t lexer[static 1]) {
 }
 
 // property ::= identifier "=" object ";"
-static struct ast_property_t*
-parse_property(struct lexer_t lexer[static 1]) {
-    struct token_t token       = {};
-    enum lex_token_type_e type = lex(lexer, &token);
+static struct ast_property*
+parse_property(struct lexer lexer[static 1], struct ast_object* parent) {
+    struct token token       = {};
+    enum lex_token_type type = lex(lexer, &token);
     if (type != TOKEN_NAME) {
         unlex(lexer, &token);
         return nullptr;
     }
-    struct ast_property_t* property = malloc(sizeof(struct ast_property_t));
+    struct ast_property* property = calloc(1, sizeof(struct ast_property));
     property->name                  = token.name;
 
     expect_token(lexer, TOKEN_ASSIGN, nullptr);
 
-    property->object = parse_object(lexer);
+    property->object = parse_object(lexer, parent);
 
     expect_token(lexer, TOKEN_SEMICOLON, nullptr);
 
     return property;
 }
 
-static struct ast_object_t*
-parse_root(struct lexer_t lexer[static 1]) {
-    struct ast_object_t* object = malloc(sizeof(struct ast_object_t));
-    object->type                = OBJECT_TYPE_PROPERTIES;
-    object->properties          = malloc(sizeof(struct ast_property_t));
-    struct ast_property_t** next_property = &object->properties;
+static struct ast_object*
+parse_root(struct lexer lexer[static 1]) {
+    struct ast_object* root = calloc(1, sizeof(struct ast_object));
+    root->id                  = id;
+    id += 1;
+    root->type       = OBJECT_TYPE_PROPERTIES;
+    root->properties = calloc(1, sizeof(struct ast_property));
+    struct ast_property** next_property = &root->properties;
 
     while (true) {
-        *next_property = parse_property(lexer);
+        *next_property = parse_property(lexer, root);
         if (*next_property == nullptr) {
             break;
         }
-        (*next_property)->next = malloc(sizeof(struct ast_property_t));
+        (*next_property)->next = calloc(1, sizeof(struct ast_property));
         next_property          = &(*next_property)->next;
     }
     free(*next_property);
     *next_property = nullptr;
-    return object;
+    return root;
 }
 
-struct ast_object_t*
-parse(struct lexer_t lexer[static 1]) {
-    struct ast_object_t* root = parse_root(lexer);
+struct ast_object*
+parse(struct lexer lexer[static 1]) {
+    struct ast_object* root = parse_root(lexer);
     expect_token(lexer, TOKEN_EOF, nullptr);
     return root;
 }
@@ -323,7 +336,7 @@ print_indent(i32 indent) {
 }
 
 static void
-print_free_property(struct ast_free_property_t* free_property, i32 indent) {
+print_free_property(struct ast_free_property* free_property, i32 indent) {
     if (free_property == nullptr) {
         return;
     }
@@ -333,7 +346,7 @@ print_free_property(struct ast_free_property_t* free_property, i32 indent) {
 }
 
 static void
-print_property(struct ast_property_t* property, i32 indent) {
+print_property(struct ast_property* property, i32 indent) {
     if (property == nullptr) {
         return;
     }
@@ -345,7 +358,7 @@ print_property(struct ast_property_t* property, i32 indent) {
 
 static void
 print_free_property_assign(
-    struct ast_free_property_assign_t* free_property_assign, i32 indent
+    struct ast_free_property_assign* free_property_assign, i32 indent
 ) {
     if (free_property_assign == nullptr) {
         return;
@@ -357,7 +370,7 @@ print_free_property_assign(
 }
 
 static void
-print_object_copy(struct ast_object_copy_t* object_copy, i32 indent) {
+print_object_copy(struct ast_object_copy* object_copy, i32 indent) {
     if (object_copy == nullptr) {
         return;
     }
@@ -368,12 +381,16 @@ print_object_copy(struct ast_object_copy_t* object_copy, i32 indent) {
 }
 
 void
-print_object(struct ast_object_t* object, i32 indent) {
+print_object(struct ast_object* object, i32 indent) {
     if (object == nullptr) {
         return;
     }
     print_indent(indent);
-    fprintf(stdout, "Object:\n");
+    fprintf(stdout, "Object %d", object->id);
+    if (object->parent != nullptr) {
+        fprintf(stdout, ", parent %d", object->parent->id);
+    }
+    fprintf(stdout, ":\n");
     print_free_property(object->free_properties, indent + 2);
     switch (object->type) {
         case OBJECT_TYPE_OBJECT_COPY:
