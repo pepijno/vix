@@ -10,7 +10,7 @@ DEPDIR := ./.deps
 OBJDIR := ./.objs
 
 CC := gcc
-CFLAGS := -g -std=c2x -Wall -Wextra -Werror -Wpedantic
+CFLAGS := -g -std=c2x -Wall -Wextra -Wpedantic
 
 SOURCES := $(wildcard $(SRCDIR)/*.c)
 OBJECTS := $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))

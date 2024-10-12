@@ -39,6 +39,7 @@ struct ast_object_copy {
 };
 
 struct ast_free_property {
+    i32 id;
     char* name;
     struct ast_free_property* next;
 };
