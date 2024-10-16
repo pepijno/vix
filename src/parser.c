@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 
-static i32 id = 0;
+static u32 id = 0;
 
 static noreturn void
 vsynerror(struct token token[static 1], va_list ap) {
@@ -339,14 +339,14 @@ parse(struct lexer lexer[static 1]) {
 }
 
 static void
-print_indent(i32 indent) {
-    for (i32 i = 0; i < indent; ++i) {
+print_indent(size indent) {
+    for (size i = 0; i < indent; ++i) {
         fprintf(stdout, " ");
     }
 }
 
 static void
-print_free_property(struct ast_free_property* free_property, i32 indent) {
+print_free_property(struct ast_free_property* free_property, size indent) {
     if (free_property == nullptr) {
         return;
     }
@@ -356,7 +356,7 @@ print_free_property(struct ast_free_property* free_property, i32 indent) {
 }
 
 static void
-print_property(struct ast_property* property, i32 indent) {
+print_property(struct ast_property* property, size indent) {
     if (property == nullptr) {
         return;
     }
@@ -368,7 +368,7 @@ print_property(struct ast_property* property, i32 indent) {
 
 static void
 print_free_property_assign(
-    struct ast_free_property_assign* free_property_assign, i32 indent
+    struct ast_free_property_assign* free_property_assign, size indent
 ) {
     if (free_property_assign == nullptr) {
         return;
@@ -380,7 +380,7 @@ print_free_property_assign(
 }
 
 static void
-print_object_copy(struct ast_object_copy* object_copy, i32 indent) {
+print_object_copy(struct ast_object_copy* object_copy, size indent) {
     if (object_copy == nullptr) {
         return;
     }
@@ -391,7 +391,7 @@ print_object_copy(struct ast_object_copy* object_copy, i32 indent) {
 }
 
 void
-print_object(struct ast_object* object, i32 indent) {
+print_object(struct ast_object* object, size indent) {
     if (object == nullptr) {
         return;
     }
@@ -411,7 +411,7 @@ print_object(struct ast_object* object, i32 indent) {
             break;
         case OBJECT_TYPE_INTEGER:
             print_indent(indent);
-            fprintf(stdout, "  value: %d\n", object->integer);
+            fprintf(stdout, "  value: %ld\n", object->integer);
             break;
         case OBJECT_TYPE_STRING:
             print_indent(indent);

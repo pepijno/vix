@@ -343,8 +343,8 @@ lex_string(struct lexer lexer[static 1], struct token out[static 1]) {
                 cp        = next(lexer, nullptr, false);
                 character = cp.character;
             }
-            char* str = calloc(lexer->buffer_length + 1, 1);
-            memcpy(str, lexer->buffer, lexer->buffer_length);
+            char* str = calloc(lexer->buffer_length, 1);
+            memcpy(str, lexer->buffer + 1, lexer->buffer_length - 1);
             out->type          = TOKEN_STRING;
             out->string.length = lexer->buffer_length;
             out->string.value  = str;

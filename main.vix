@@ -1,7 +1,9 @@
-a = x > c;
+a = x y > c;
 
 b = y > 3;
 
 c = "bla";
 
-main = a(5);
+d = b(3);
+
+main = a(5, 7);

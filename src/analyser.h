@@ -45,4 +45,6 @@ struct function_type {
     struct function_param_type* param_types;
 };
 
-void analyse(struct ast_object root[static 1]);
+extern struct function_type function_types[1024];
+
+struct function_type* analyse(struct ast_object root[static 1]);

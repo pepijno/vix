@@ -48,6 +48,7 @@ update_types(struct ast_object object[static 1]) {
     struct function_type* type = &function_types[object->id];
 
     type->param_types = calloc(1, sizeof(struct function_param_type));
+    type->id          = object->id;
     struct function_param_type** next   = &type->param_types;
     struct ast_free_property* free_prop = object->free_properties;
     while (free_prop != nullptr) {
@@ -189,7 +190,7 @@ print_types(struct function_type type[static 1], u8 indent) {
         printf("%*sfrees:\n", indent, "");
         struct function_param_type* param_type = type->param_types;
         while (param_type != nullptr) {
-            printf("%*s  %s:\n", indent, "", param_type->name);
+            printf("%*s  %d %s:\n", indent, "", param_type->function_type->id, param_type->name);
             print_types(param_type->function_type, indent + 4);
             param_type = param_type->next;
         }
@@ -202,12 +203,12 @@ print_types(struct function_type type[static 1], u8 indent) {
     if (type->return_type.return_type == RETURN_OBJECT) {
         struct return_object_property* prop = type->return_type.properties;
         while (prop != nullptr) {
-            printf("%*s  %s:\n", indent, "", prop->name);
+            printf("%*s  %d %s:\n", indent, "", prop->function_type->id, prop->name);
             print_types(prop->function_type, indent + 4);
             prop = prop->next;
         }
     } else if (type->return_type.return_type == RETURN_COPY) {
-        printf("%*scopy:\n", indent, "");
+        printf("%*scopy %d:\n", indent, "", type->return_type.copy_type->id);
         print_types(type->return_type.copy_type, indent + 2);
     } else if (type->return_type.return_type == RETURN_UNION) {
         printf("%*sunion:\n", indent, "");
@@ -220,7 +221,7 @@ print_types(struct function_type type[static 1], u8 indent) {
     }
 }
 
-void
+struct function_type*
 analyse(struct ast_object root[static 1]) {
     for (size i = 0; i < 1024; ++i) {
         function_types[i].id = -1;
@@ -228,4 +229,5 @@ analyse(struct ast_object root[static 1]) {
 
     struct function_type* root_type = update_types(root);
     print_types(root_type, 0);
+    return root_type;
 }

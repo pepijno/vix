@@ -1,4 +1,5 @@
 #include "analyser.h"
+#include "emit.h"
 #include "generator.h"
 #include "lexer.h"
 #include "parser.h"
@@ -27,9 +28,14 @@ main(i32 argc, char* argv[]) {
     struct ast_object* root = parse(&lexer);
     print_object(root, 0);
 
-    analyse(root);
+    struct function_type* root_type = analyse(root);
 
-    // generate(root);
+    struct qbe_program program = {};
+    program.next = &program.definitions;
+
+    generate(&program, root, root_type);
+
+    emit(&program, stdout);
 
     return 0;
 }

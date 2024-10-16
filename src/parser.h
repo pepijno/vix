@@ -15,14 +15,14 @@ enum object_type {
 };
 
 struct ast_object {
-    i32 id;
+    u32 id;
     struct ast_object* parent;
     enum object_type type;
     struct ast_free_property* free_properties;
     union {
         struct ast_object_copy* object_copy;
         struct ast_property* properties;
-        i32 integer;
+        u64 integer;
         char* string;
     };
 };
@@ -39,7 +39,7 @@ struct ast_object_copy {
 };
 
 struct ast_free_property {
-    i32 id;
+    u32 id;
     char* name;
     struct ast_free_property* next;
 };
@@ -51,4 +51,4 @@ struct ast_property {
 };
 
 struct ast_object* parse(struct lexer lexer[static 1]);
-void print_object(struct ast_object* object, i32 indent);
+void print_object(struct ast_object* object, size indent);

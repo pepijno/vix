@@ -17,3 +17,5 @@ typedef intptr_t iptr;
 typedef char byte;
 typedef ptrdiff_t size;
 typedef size_t usize;
+
+#define ALIGN_UNDEFINED ((size)-1)
