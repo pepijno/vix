@@ -20,6 +20,7 @@
           asm-lsp
           asmfmt
           qbe
+          bear
         ];
       in
       rec {

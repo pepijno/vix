@@ -2,3 +2,5 @@ bin/
 src/*.o
 .objs/
 .deps/
+.cache
+compile_commands.json
