@@ -48,39 +48,39 @@ set_color_posix(enum term_color color) {
 
 static void
 print_error_message_type(
-    struct error_message error_message[static 1], enum error_color color,
+    struct error_message* error_message, enum error_color color,
     enum error_type error_type
 ) {
-    char const* path = error_message->path;
-    i32 line         = error_message->line_start + 1;
-    i32 col          = error_message->column_start + 1;
-    char const* text = error_message->message;
+    struct string path = error_message->path;
+    i32 line           = error_message->line_start + 1;
+    i32 col            = error_message->column_start + 1;
+    struct string text = error_message->message;
 
     bool is_tty = isatty(STDERR_FILENO) != 0;
     if (color == ERROR_COLOR_ON || (color == ERROR_COLOR_AUTO && is_tty)) {
         if (error_type == ERROR_TYPE_ERROR) {
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, "%s:%d:%d: ", path, line, col);
+            fprintf(stderr, STR_FMT ":%d:%d: ", STR_ARG(path), line, col);
             set_color_posix(TERM_COLOR_RED);
             fprintf(stderr, "error: ");
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, " %s", text);
+            fprintf(stderr, " " STR_FMT, STR_ARG(text));
             set_color_posix(TERM_COLOR_RESET);
             fprintf(stderr, "\n");
         } else if (error_type == ERROR_TYPE_NOTE) {
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, "%s:%d:%d: ", path, line, col);
+            fprintf(stderr, STR_FMT ":%d:%d: ", STR_ARG(path), line, col);
             set_color_posix(TERM_COLOR_CYAN);
             fprintf(stderr, "note: ");
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, " %s", text);
+            fprintf(stderr, " " STR_FMT, STR_ARG(text));
             set_color_posix(TERM_COLOR_RESET);
             fprintf(stderr, "\n");
         } else {
             vix_unreachable();
         }
 
-        fprintf(stderr, "%s\n", error_message->line_buffer);
+        fprintf(stderr, STR_FMT "\n", STR_ARG(error_message->line_buffer));
         for (i64 i = 0; i < error_message->column_start; ++i) {
             fprintf(stderr, " ");
         }
@@ -90,9 +90,15 @@ print_error_message_type(
         fprintf(stderr, "\n");
     } else {
         if (error_type == ERROR_TYPE_ERROR) {
-            fprintf(stderr, "%s:%d:%d: error: %s\n", path, line, col, text);
+            fprintf(
+                stderr, STR_FMT ":%d:%d: error: " STR_FMT "\n", STR_ARG(path),
+                line, col, STR_ARG(text)
+            );
         } else if (error_type == ERROR_TYPE_NOTE) {
-            fprintf(stderr, "%s:%d:%d: note: %s\n", path, line, col, text);
+            fprintf(
+                stderr, STR_FMT ":%d:%d: note: " STR_FMT "\n", STR_ARG(path),
+                line, col, STR_ARG(text)
+            );
         } else {
             vix_unreachable();
         }
@@ -107,14 +113,14 @@ print_error_message_type(
 
 void
 print_error_message(
-    struct error_message error_message[static 1], enum error_color color
+    struct error_message* error_message, enum error_color color
 ) {
     print_error_message_type(error_message, color, ERROR_TYPE_ERROR);
 }
 
 void
 error_message_add_note(
-    struct error_message parent[static 1], struct error_message note[static 1]
+    struct error_message* parent, struct error_message* note
 ) {
     struct error_message** next = &parent->next;
     while (next) {
@@ -125,8 +131,8 @@ error_message_add_note(
 
 struct error_message
 error_message_create_with_line(
-    char* path, i32 line, i32 column, char* source, i32* line_offsets,
-    char* message
+    struct string path, i32 line, i32 column, struct string source,
+    i32* line_offsets, struct string message
 ) {
     (void) source;
     (void) line_offsets;

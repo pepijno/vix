@@ -1,7 +1,6 @@
 #pragma once
 
 #include "defs.h"
-#include "str.h"
 
 struct function_type;
 

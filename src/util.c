@@ -10,14 +10,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-char const** sources;
+struct string* sources;
 
 noreturn void
-vix_panic(char* format, ...) {
+vix_panic(struct string format, ...) {
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "%s:%d ", __FILE__, __LINE__);
-    vfprintf(stderr, format, ap);
+    vfprintf(stderr, format.data, ap);
     fprintf(stderr, "\n");
     fflush(stderr);
     va_end(ap);
@@ -26,7 +26,7 @@ vix_panic(char* format, ...) {
 
 noreturn void
 vix_unreachable(void) {
-    vix_panic("unreachable");
+    vix_panic(from_cstr("unreachable"));
 }
 
 static i32
@@ -82,13 +82,13 @@ getline(struct arena* arena, char** lineptr, i32* n, FILE* stream) {
 
 void
 error_line(struct arena* arena, struct location location) {
-    char const* path = sources[location.file];
+    struct string path = sources[location.file];
     struct stat filestat;
-    if (stat((char*) path, &filestat) == -1 || !S_ISREG(filestat.st_mode)) {
+    if (stat(path.data, &filestat) == -1 || !S_ISREG(filestat.st_mode)) {
         return;
     }
 
-    FILE* src = fopen((char*) path, "r");
+    FILE* src = fopen(path.data, "r");
     if (!src) {
         return;
     }

@@ -1,14 +1,13 @@
-#include "str.h"
-
 #include "allocator.h"
+#include "defs.h"
 
 #include <string.h>
 
 struct string
-create_from_cstring(char* str) {
+from_cstr(char* str) {
     return (struct string){
         .length = strlen(str),
-        .buffer = str,
+        .data   = str,
     };
 }
 
@@ -18,7 +17,7 @@ strings_equal(struct string const s1, struct string const s2) {
         return false;
     }
     for (usize i = 0; i < s1.length; i += 1) {
-        if (s1.buffer[i] != s2.buffer[i]) {
+        if (s1.data[i] != s2.data[i]) {
             return false;
         }
     }
@@ -26,11 +25,26 @@ strings_equal(struct string const s1, struct string const s2) {
 }
 
 struct string
+string_init_empty(struct arena* arena, usize size) {
+    return (struct string){
+        .data = arena_allocate(arena, size * sizeof(char)),
+        .length = size,
+    };
+}
+
+struct string
+string_grow(struct arena* arena, struct string string, usize new_size) {
+    struct string new_string = string_init_empty(arena, new_size);
+    memcpy(new_string.data, string.data, string.length);
+    return new_string;
+}
+
+struct string
 string_duplicate(struct arena* arena, struct string const string) {
     char* buffer = arena_allocate(arena, string.length);
-    memcpy(buffer, string.buffer, string.length);
+    memcpy(buffer, string.data, string.length);
     return (struct string){
-        .buffer = buffer,
+        .data   = buffer,
         .length = string.length,
     };
 }

@@ -1,28 +1,25 @@
 #pragma once
 
 #include "defs.h"
-#include "str.h"
 
 struct ast_free_property;
 struct ast_property;
 struct ast_object_copy;
 
-enum object_type {
-    OBJECT_TYPE_NONE,
-    OBJECT_TYPE_OBJECT_COPY,
-    OBJECT_TYPE_PROPERTIES,
-    OBJECT_TYPE_INTEGER,
-    OBJECT_TYPE_STRING
+enum ast_object_alias {
+    AST_OBJECT_ALIAS_NONE,
+    AST_OBJECT_ALIAS_INTEGER,
+    AST_OBJECT_ALIAS_STRING,
+    AST_OBJECT_ALIAS_OBJECT_COPY,
+    AST_OBJECT_ALIAS_ANY,
 };
 
 struct ast_object {
     u32 id;
-    struct ast_object* parent;
-    enum object_type type;
-    struct ast_free_property* free_properties;
+    enum ast_object_alias alias;
+    struct ast_property* properties;
     union {
         struct ast_object_copy* object_copy;
-        struct ast_property* properties;
         u64 integer;
         struct string string;
     };
@@ -39,13 +36,14 @@ struct ast_object_copy {
     struct ast_object_copy* next;
 };
 
-struct ast_free_property {
-    u32 id;
-    struct string name;
-    struct ast_free_property* next;
+enum ast_property_type {
+    AST_PROPERTY_TYPE_FREE,
+    AST_PROPERTY_TYPE_NON_FREE,
 };
 
 struct ast_property {
+    u32 id;
+    enum ast_property_type type;
     struct string name;
     struct ast_object* object;
     struct ast_property* next;

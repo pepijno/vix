@@ -6,7 +6,7 @@
 #include <stdnoreturn.h>
 #include <unistd.h>
 
-extern char const** sources;
+extern struct string* sources;
 
 enum exit_status {
     EXIT_USER     = 1,
@@ -16,8 +16,7 @@ enum exit_status {
     EXIT_ABNORMAL = 255
 };
 
-// __attribute__((format(printf, 1, 2)))
-noreturn void vix_panic(char* format, ...);
+noreturn void vix_panic(struct string format, ...);
 
 noreturn void vix_unreachable(void);
 

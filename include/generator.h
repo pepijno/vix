@@ -1,7 +1,7 @@
 #pragma once
 
 #include "defs.h"
-#include "str.h"
+
 enum generated_value_type {
     GENERATED_VALUE_TYPE_CONSTANT,
     GENERATED_VALUE_TYPE_GLOBAL,

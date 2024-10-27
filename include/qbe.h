@@ -1,7 +1,6 @@
 #pragma once
 
 #include "defs.h"
-#include "str.h"
 
 enum qbe_stype {
     QBE_STYPE_VOID      = 'V',

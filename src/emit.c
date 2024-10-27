@@ -22,7 +22,7 @@ emit_qtype(struct qbe_type const* type, bool aggregate, FILE* out) {
         case QBE_STYPE_AGGREGATE:
         case QBE_STYPE_UNION:
             if (aggregate) {
-                fprintf(out, ":%s", type->name.buffer);
+                fprintf(out, ":" STR_FMT, STR_ARG(type->name));
             } else {
                 fprintf(out, "l");
             }
@@ -31,10 +31,10 @@ emit_qtype(struct qbe_type const* type, bool aggregate, FILE* out) {
 }
 
 void
-qemit_type(struct qbe_definition definition[static 1], FILE out[static 1]) {
+qemit_type(struct qbe_definition* definition, FILE* out) {
     assert(definition->definition_type == QBE_DEFINITION_TYPE_TYPE);
     struct qbe_type* type = &definition->type;
-    fprintf(out, "type :%s =", definition->name.buffer);
+    fprintf(out, "type :" STR_FMT " =", STR_ARG(definition->name));
     fprintf(out, " {");
 
     struct qbe_field* field = &definition->type.fields;
@@ -61,7 +61,7 @@ qemit_type(struct qbe_definition definition[static 1], FILE out[static 1]) {
 }
 
 static void
-emit_constant(struct qbe_value value[static 1], FILE out[static 1]) {
+emit_constant(struct qbe_value* value, FILE* out) {
     switch (value->type->stype) {
         case QBE_STYPE_BYTE:
         case QBE_STYPE_HALF:
@@ -81,19 +81,19 @@ emit_constant(struct qbe_value value[static 1], FILE out[static 1]) {
 }
 
 static void
-emit_value(struct qbe_value value[static 1], FILE out[static 1]) {
+emit_value(struct qbe_value* value, FILE* out) {
     switch (value->value_type) {
         case QBE_VALUE_TYPE_CONSTANT:
             emit_constant(value, out);
             break;
         case QBE_VALUE_TYPE_GLOBAL:
-            fprintf(out, "$%s", value->name.buffer);
+            fprintf(out, "$" STR_FMT, STR_ARG(value->name));
             break;
         case QBE_VALUE_TYPE_LABEL:
-            fprintf(out, "@%s", value->name.buffer);
+            fprintf(out, "@" STR_FMT, STR_ARG(value->name));
             break;
         case QBE_VALUE_TYPE_TEMPORARY:
-            fprintf(out, "%%%s", value->name.buffer);
+            fprintf(out, "%%" STR_FMT, STR_ARG(value->name));
             break;
         case QBE_VALUE_TYPE_VARIADIC:
             fprintf(out, "...");
@@ -102,7 +102,7 @@ emit_value(struct qbe_value value[static 1], FILE out[static 1]) {
 }
 
 static bool
-is_zeroes(struct qbe_data_item item[static 1]) {
+is_zeroes(struct qbe_data_item* item) {
     for (struct qbe_data_item* current = item; current != nullptr;
          current                       = current->next) {
         switch (current->data_type) {
@@ -131,7 +131,7 @@ is_zeroes(struct qbe_data_item item[static 1]) {
                 break;
             case QBE_DATA_TYPE_STRINGS:
                 for (usize i = 0; i < current->string.length; i += 1) {
-                    if (current->string.buffer[i] != 0) {
+                    if (current->string.data[i] != 0) {
                         return false;
                     }
                 }
@@ -144,25 +144,24 @@ is_zeroes(struct qbe_data_item item[static 1]) {
 }
 
 static void
-emit_data_string(struct string string, FILE out[static 1]) {
+emit_data_string(struct string string, FILE* out) {
     bool q = false;
     for (usize i = 0; i < string.length; i += 1) {
-        if (!isprint((unsigned char) (string.buffer[i]))
-            || string.buffer[i] == '"' || string.buffer[i] == '\\') {
+        if (!isprint((unsigned char) (string.data[i])) || string.data[i] == '"'
+            || string.data[i] == '\\') {
             if (q) {
                 q = false;
                 fprintf(out, "\", ");
             }
             fprintf(
-                out, "b %d%s", string.buffer[i],
-                i + 1 < string.length ? ", " : ""
+                out, "b %d%s", string.data[i], i + 1 < string.length ? ", " : ""
             );
         } else {
             if (!q) {
                 q = true;
                 fprintf(out, "b \"");
             }
-            fprintf(out, "%c", string.buffer[i]);
+            fprintf(out, "%c", string.data[i]);
         }
     }
     if (q) {
@@ -171,7 +170,7 @@ emit_data_string(struct string string, FILE out[static 1]) {
 }
 
 static void
-qemit_data(struct qbe_definition definition[static 1], FILE out[static 1]) {
+qemit_data(struct qbe_definition* definition, FILE* out) {
     assert(definition->definition_type == QBE_DEFINITION_TYPE_DATA);
     if (definition->data.section != nullptr
         && definition->data.section_flags != 0) {
@@ -182,12 +181,14 @@ qemit_data(struct qbe_definition definition[static 1], FILE out[static 1]) {
     } else if (definition->data.section != nullptr) {
         fprintf(out, "section \"%s\"", definition->data.section);
     } else if (is_zeroes(&definition->data.items)) {
-        fprintf(out, "section \".bss.%s\"", definition->name.buffer);
+        fprintf(out, "section \".bss." STR_FMT "\"", STR_ARG(definition->name));
     } else {
-        fprintf(out, "section \".data.%s\"", definition->name.buffer);
+        fprintf(
+            out, "section \".data." STR_FMT "\"", STR_ARG(definition->name)
+        );
     }
     fprintf(out, "\n");
-    fprintf(out, "data $%s = ", definition->name.buffer);
+    fprintf(out, "data $" STR_FMT " = ", STR_ARG(definition->name));
     if (definition->data.align != ALIGN_UNDEFINED) {
         fprintf(out, "align %zu ", definition->data.align);
     }
@@ -219,9 +220,7 @@ qemit_data(struct qbe_definition definition[static 1], FILE out[static 1]) {
 }
 
 static void
-emit_definition(
-    struct qbe_definition definition[static 1], FILE out[static 1]
-) {
+emit_definition(struct qbe_definition* definition, FILE* out) {
     switch (definition->definition_type) {
         case QBE_DEFINITION_TYPE_FUNCTION:
             break;
@@ -235,7 +234,7 @@ emit_definition(
 }
 
 void
-emit(struct qbe_program program[static 1], FILE out[static 1]) {
+emit(struct qbe_program* program, FILE* out) {
     struct qbe_definition* definition = program->definitions;
     while (definition) {
         emit_definition(definition, out);

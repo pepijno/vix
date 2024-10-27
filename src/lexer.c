@@ -11,67 +11,67 @@
 
 struct string const token_names[]
     = { [TOKEN_NONE]         = {
-        .buffer = "TOKEN_NONE",
+        .data = "TOKEN_NONE",
         .length = 10,
     },
     [TOKEN_NAME]         = {
-        .buffer = "TOKEN_NAME",
+        .data = "TOKEN_NAME",
         .length = 10,
     },
     [TOKEN_ASSIGN]         = {
-        .buffer = "TOKEN_ASSIGN",
+        .data = "TOKEN_ASSIGN",
         .length = 12,
     },
     [TOKEN_DOT]         = {
-        .buffer = "TOKEN_DOT",
+        .data = "TOKEN_DOT",
         .length = 9,
     },
     [TOKEN_DOT_DOT_DOT]         = {
-        .buffer = "TOKEN_DOT_DOT_DOT",
+        .data = "TOKEN_DOT_DOT_DOT",
         .length = 17,
     },
     [TOKEN_COMMA]         = {
-        .buffer = "TOKEN_COMMA",
+        .data = "TOKEN_COMMA",
         .length = 11,
     },
     [TOKEN_CHAR]         = {
-        .buffer = "TOKEN_CHAR",
+        .data = "TOKEN_CHAR",
         .length = 10,
     },
     [TOKEN_STRING]         = {
-        .buffer = "TOKEN_STRING",
+        .data = "TOKEN_STRING",
         .length = 12,
     },
     [TOKEN_OPEN_BRACE]         = {
-        .buffer = "TOKEN_OPEN_BRACE",
+        .data = "TOKEN_OPEN_BRACE",
         .length = 16,
     },
     [TOKEN_CLOSE_BRACE]         = {
-        .buffer = "TOKEN_CLOSE_BRACE",
+        .data = "TOKEN_CLOSE_BRACE",
         .length = 17,
     },
     [TOKEN_OPEN_PAREN]         = {
-        .buffer = "TOKEN_OPEN_PAREN",
+        .data = "TOKEN_OPEN_PAREN",
         .length = 16,
     },
     [TOKEN_CLOSE_PAREN]         = {
-        .buffer = "TOKEN_CLOSE_PAREN",
+        .data = "TOKEN_CLOSE_PAREN",
         .length = 17,
     },
     [TOKEN_GREATER_THAN]         = {
-        .buffer = "TOKEN_GREATER_THAN",
+        .data = "TOKEN_GREATER_THAN",
         .length = 18,
     },
     [TOKEN_SEMICOLON]         = {
-        .buffer = "TOKEN_SEMICOLON",
+        .data = "TOKEN_SEMICOLON",
         .length = 15,
     },
     [TOKEN_INTEGER]         = {
-        .buffer = "TOKEN_INTEGER",
+        .data = "TOKEN_INTEGER",
         .length = 13,
     },
     [TOKEN_EOF]         = {
-        .buffer = "TOKEN_EOF",
+        .data = "TOKEN_EOF",
         .length = 9,
     }
 };
@@ -280,7 +280,7 @@ lex_name(struct arena* arena, struct lexer* lexer, struct token* out) {
     out->name = string_duplicate(
         arena,
         (struct string){
-            .buffer = lexer->buffer,
+            .data   = lexer->buffer,
             .length = lexer->buffer_length,
         }
     );
@@ -403,7 +403,7 @@ lex_string(struct arena* arena, struct lexer* lexer, struct token* out) {
             out->string = string_duplicate(
                 arena,
                 (struct string){
-                    .buffer = lexer->buffer + 1,
+                    .data   = lexer->buffer + 1,
                     .length = lexer->buffer_length,
                 }
             );

@@ -1,9 +1,9 @@
 #include "allocator.h"
 #include "analyser.h"
+#include "ast.h"
 #include "emit.h"
 #include "generator.h"
 #include "lexer.h"
-#include "parser.h"
 #include "qbe.h"
 
 #include <stdio.h>
@@ -22,20 +22,20 @@ main(i32 argc, char* argv[]) {
 
     FILE* f            = fopen(argv[1], "rb");
     struct lexer lexer = lexer_new(&arena, f, 0);
-    sources            = arena_allocate(&arena, 2 * sizeof(char**));
-    sources[0]         = argv[1];
+    sources            = arena_allocate(&arena, 2 * sizeof(struct string*));
+    sources[0]         = from_cstr(argv[1]);
 
     struct ast_object* root = parse(&arena, &lexer);
     print_object(root, 0);
 
-    struct function_type* root_type = analyse(&arena, root);
-
-    struct qbe_program program = {};
-    program.next               = &program.definitions;
-
-    generate(&arena, &program, root, root_type);
-
-    emit(&program, stdout);
+    // struct function_type* root_type = analyse(&arena, root);
+    //
+    // struct qbe_program program = {};
+    // program.next               = &program.definitions;
+    //
+    // generate(&arena, &program, root, root_type);
+    //
+    // emit(&program, stdout);
 
     return 0;
 }
