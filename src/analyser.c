@@ -1,7 +1,11 @@
 #include "analyser.h"
 
+#include "allocator.h"
+#include "parser.h"
+#include "util.h"
+
+#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 struct function_type function_types[1024];
 
@@ -12,10 +16,10 @@ struct nearest_object {
 };
 
 static struct nearest_object
-find_nearest_object(struct ast_object object[static 1], char* name) {
+find_nearest_object(struct ast_object* object, struct string name) {
     struct ast_free_property* free_prop = object->free_properties;
     while (free_prop != nullptr) {
-        if (strcmp(free_prop->name, name) == 0) {
+        if (strings_equal(free_prop->name, name)) {
             return (struct nearest_object){
                 .id        = free_prop->id,
                 .free_prop = free_prop,
@@ -27,7 +31,7 @@ find_nearest_object(struct ast_object object[static 1], char* name) {
     if (object->type == OBJECT_TYPE_PROPERTIES) {
         struct ast_property* prop = object->properties;
         while (prop != nullptr) {
-            if (strcmp(prop->name, name) == 0) {
+            if (strings_equal(prop->name, name)) {
                 return (struct nearest_object){
                     .id        = prop->object->id,
                     .free_prop = nullptr,
@@ -44,24 +48,22 @@ find_nearest_object(struct ast_object object[static 1], char* name) {
 }
 
 static struct function_type*
-update_types(struct ast_object object[static 1]) {
+update_types(struct arena* arena, struct ast_object object[static 1]) {
     struct function_type* type = &function_types[object->id];
 
-    type->param_types = calloc(1, sizeof(struct function_param_type));
+    type->param_types = arena_allocate(arena, sizeof(struct function_param_type));
     type->id          = object->id;
     struct function_param_type** next   = &type->param_types;
     struct ast_free_property* free_prop = object->free_properties;
     while (free_prop != nullptr) {
-        (*next)->name = malloc(sizeof(char) * (strlen(free_prop->name) + 1));
-        strcpy((*next)->name, free_prop->name);
-        (*next)->next          = calloc(1, sizeof(struct function_param_type));
+        (*next)->name = string_duplicate(arena, free_prop->name);
+        (*next)->next          = arena_allocate(arena, sizeof(struct function_param_type));
         (*next)->function_type = &function_types[free_prop->id];
         (*next)->function_type->id                      = free_prop->id;
         (*next)->function_type->return_type.return_type = RETURN_ANY;
         next                                            = &(*next)->next;
         free_prop                                       = free_prop->next;
     }
-    free(*next);
     *next = nullptr;
 
     switch (object->type) {
@@ -77,7 +79,7 @@ update_types(struct ast_object object[static 1]) {
 
             if (nearest_object.object != nullptr
                 && function_types[id].id == -1) {
-                update_types(nearest_object.object);
+                update_types(arena, nearest_object.object);
             } else if (nearest_object.free_prop != nullptr
                        && function_types[id].id == -1) {
                 function_types[id].id                      = free_prop->id;
@@ -90,14 +92,14 @@ update_types(struct ast_object object[static 1]) {
                 = type->return_type.copy_type->param_types;
             while (free_assign != nullptr) {
                 if (function_types[free_assign->value->id].id == -1) {
-                    update_types(free_assign->value);
+                    update_types(arena, free_assign->value);
                 }
                 if (param_type->function_type->return_type.return_type
                     == RETURN_ANY) {
                     param_type->function_type->return_type.return_type
                         = RETURN_UNION;
                     param_type->function_type->return_type.function_union
-                        = calloc(1, sizeof(struct function_union));
+                        = arena_allocate(arena, sizeof(struct function_union));
                     param_type->function_type->return_type.function_union->type
                         = &function_types[free_assign->value->id];
                     param_type->function_type->return_type.function_union->next
@@ -113,7 +115,7 @@ update_types(struct ast_object object[static 1]) {
                             break;
                         }
                     }
-                    last->next       = calloc(1, sizeof(struct function_union));
+                    last->next       = arena_allocate(arena, sizeof(struct function_union));
                     last->next->type = &function_types[free_assign->value->id];
                     last->next->next = nullptr;
                 } else {
@@ -129,25 +131,22 @@ update_types(struct ast_object object[static 1]) {
         case OBJECT_TYPE_PROPERTIES: {
             type->return_type.return_type = RETURN_OBJECT;
             type->return_type.properties
-                = calloc(1, sizeof(struct return_object_property));
+                = arena_allocate(arena, sizeof(struct return_object_property));
             struct return_object_property** next_prop
                 = &type->return_type.properties;
 
             struct ast_property* prop = object->properties;
             while (prop != nullptr) {
-                (*next_prop)->name
-                    = malloc(sizeof(char) * (strlen(prop->name) + 1));
-                strcpy((*next_prop)->name, prop->name);
+                (*next_prop)->name = string_duplicate(arena, prop->name);
 
-                (*next_prop)->function_type = update_types(prop->object);
+                (*next_prop)->function_type = update_types(arena, prop->object);
 
                 (*next_prop)->next
-                    = calloc(1, sizeof(struct return_object_property));
+                    = arena_allocate(arena, sizeof(struct return_object_property));
                 next_prop = &(*next_prop)->next;
                 prop      = prop->next;
             }
 
-            free(*next_prop);
             *next_prop = nullptr;
 
             break;
@@ -185,12 +184,12 @@ type_to_string(enum return_type type) {
 }
 
 void
-print_types(struct function_type type[static 1], u8 indent) {
+print_types(struct function_type* type, u8 indent) {
     if (type->param_types != nullptr) {
         printf("%*sfrees:\n", indent, "");
         struct function_param_type* param_type = type->param_types;
         while (param_type != nullptr) {
-            printf("%*s  %d %s:\n", indent, "", param_type->function_type->id, param_type->name);
+            printf("%*s  %d %s:\n", indent, "", param_type->function_type->id, param_type->name.buffer);
             print_types(param_type->function_type, indent + 4);
             param_type = param_type->next;
         }
@@ -203,7 +202,7 @@ print_types(struct function_type type[static 1], u8 indent) {
     if (type->return_type.return_type == RETURN_OBJECT) {
         struct return_object_property* prop = type->return_type.properties;
         while (prop != nullptr) {
-            printf("%*s  %d %s:\n", indent, "", prop->function_type->id, prop->name);
+            printf("%*s  %d %s:\n", indent, "", prop->function_type->id, prop->name.buffer);
             print_types(prop->function_type, indent + 4);
             prop = prop->next;
         }
@@ -222,12 +221,12 @@ print_types(struct function_type type[static 1], u8 indent) {
 }
 
 struct function_type*
-analyse(struct ast_object root[static 1]) {
-    for (size i = 0; i < 1024; ++i) {
+analyse(struct arena* arena, struct ast_object* root) {
+    for (usize i = 0; i < 1024; ++i) {
         function_types[i].id = -1;
     }
 
-    struct function_type* root_type = update_types(root);
+    struct function_type* root_type = update_types(arena, root);
     print_types(root_type, 0);
     return root_type;
 }

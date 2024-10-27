@@ -1,28 +1,33 @@
 #include "generator.h"
 
+#include "allocator.h"
 #include "analyser.h"
-#include "parser.h"
 #include "qbe.h"
+#include "parser.h"
+#include "util.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 u32 id = 0;
 
-static char*
-generate_name(char const* format) {
-    i32 n        = snprintf(nullptr, 0, format, id);
-    char* string = calloc(n + 1, sizeof(char));
-    snprintf(string, n + 1, format, id);
+static struct string
+generate_name(struct arena* arena, char const* format) {
+    i32 n      = snprintf(nullptr, 0, format, id);
+    char* buffer = arena_allocate(arena, n + 1);
+    snprintf(buffer, n + 1, format, id);
     id += 1;
-    return string;
+    return (struct string){
+        .buffer = buffer,
+        .length = n,
+    };
 }
 
 static void
 generate_data_item(
-    struct qbe_program program[static 1], struct ast_object object[static 1],
-    struct qbe_data_item item[static 1]
+    struct arena* arena, struct qbe_program* program,
+    struct ast_object* object, struct qbe_data_item* item
 ) {
     struct qbe_definition* definition;
 
@@ -33,39 +38,34 @@ generate_data_item(
             break;
         }
         case OBJECT_TYPE_STRING: {
-            definition       = calloc(1, sizeof(struct qbe_definition));
-            definition->name = generate_name("string_data.%d");
+            definition       = arena_allocate(arena, sizeof(struct qbe_definition));
+            definition->name = generate_name(arena, "string_data.%d");
             definition->definition_type      = QBE_DEFINITION_TYPE_DATA;
             definition->data.align           = ALIGN_UNDEFINED;
             definition->data.items.data_type = QBE_DATA_TYPE_STRINGS;
             definition->data.items.string
-                = calloc(strlen(object->string) + 1, sizeof(char));
-            definition->data.items.size = strlen(object->string) + 1;
-            memcpy(
-                definition->data.items.string, object->string,
-                strlen(object->string) + 1
-            );
+                = string_duplicate(arena, object->string);
 
             item->data_type = QBE_DATA_TYPE_VALUE;
-            if (strlen(object->string) != 0) {
+            if (object->string.length != 0) {
                 qbe_append_definition(program, definition);
                 item->value.value_type = QBE_VALUE_TYPE_GLOBAL;
                 item->value.type       = &qbe_long;
-                item->value.name       = strdup(definition->name);
+                item->value.name
+                    = string_duplicate(arena, definition->name);
             } else {
-                free(definition);
                 item->value = const_u64(0);
             }
 
-            item->next      = calloc(1, sizeof(struct qbe_data_item));
+            item->next      = arena_allocate(arena, sizeof(struct qbe_data_item));
             item            = item->next;
             item->data_type = QBE_DATA_TYPE_VALUE;
-            item->value     = const_u64(strlen(object->string) + 1);
+            item->value     = const_u64(object->string.length + 1);
 
-            item->next      = calloc(1, sizeof(struct qbe_data_item));
+            item->next      = arena_allocate(arena, sizeof(struct qbe_data_item));
             item            = item->next;
             item->data_type = QBE_DATA_TYPE_VALUE;
-            item->value     = const_u64(strlen(object->string) + 1);
+            item->value     = const_u64(object->string.length + 1);
             break;
         }
         case OBJECT_TYPE_NONE:
@@ -77,34 +77,36 @@ generate_data_item(
 
 static void
 generate_string_literal(
-    struct qbe_program program[static 1], struct ast_object object[static 1]
+    struct arena* arena, struct qbe_program* program,
+    struct ast_object* object
 ) {
     assert(object->type == OBJECT_TYPE_STRING);
     struct qbe_definition* definition
-        = calloc(1, sizeof(struct qbe_definition));
+        = arena_allocate(arena, sizeof(struct qbe_definition));
     definition->definition_type = QBE_DEFINITION_TYPE_DATA;
     definition->data.align      = ALIGN_UNDEFINED;
-    definition->name            = generate_name("string_literal.%d");
+    definition->name            = generate_name(arena, "string_literal.%d");
 
-    generate_data_item(program, object, &definition->data.items);
+    generate_data_item(arena, program, object, &definition->data.items);
     qbe_append_definition(program, definition);
 }
 
 static void
 generate_integer_literal(
-    struct qbe_program program[static 1], struct ast_object object[static 1]
+    struct arena* arena, struct qbe_program* program,
+    struct ast_object* object
 ) {
     assert(object->type == OBJECT_TYPE_INTEGER);
     struct qbe_definition* definition
-        = calloc(1, sizeof(struct qbe_definition));
+        = arena_allocate(arena, sizeof(struct qbe_definition));
     definition->definition_type = QBE_DEFINITION_TYPE_DATA;
-    definition->name            = generate_name("integer_literal.%d");
+    definition->name            = generate_name(arena, "integer_literal.%d");
 
-    generate_data_item(program, object, &definition->data.items);
+    generate_data_item(arena, program, object, &definition->data.items);
     qbe_append_definition(program, definition);
 }
 
-size sizes[1024];
+usize sizes[1024];
 
 struct nearest_object {
     i32 id;
@@ -113,10 +115,10 @@ struct nearest_object {
 };
 
 static struct nearest_object
-find_nearest_object(struct ast_object object[static 1], char* name) {
+find_nearest_object(struct ast_object* object, struct string name) {
     struct ast_free_property* free_prop = object->free_properties;
     while (free_prop != nullptr) {
-        if (strcmp(free_prop->name, name) == 0) {
+        if (strings_equal(free_prop->name, name)) {
             return (struct nearest_object){
                 .id        = free_prop->id,
                 .free_prop = free_prop,
@@ -128,7 +130,7 @@ find_nearest_object(struct ast_object object[static 1], char* name) {
     if (object->type == OBJECT_TYPE_PROPERTIES) {
         struct ast_property* prop = object->properties;
         while (prop != nullptr) {
-            if (strcmp(prop->name, name) == 0) {
+            if (strings_equal(prop->name, name)) {
                 return (struct nearest_object){
                     .id        = prop->object->id,
                     .free_prop = nullptr,
@@ -145,7 +147,7 @@ find_nearest_object(struct ast_object object[static 1], char* name) {
 }
 
 static bool
-all_free_props_any(struct function_type function_type[static 1]) {
+all_free_props_any(struct function_type* function_type) {
     struct function_param_type* param_type = function_type->param_types;
     bool allAny                            = true;
     while (param_type != nullptr) {
@@ -160,7 +162,8 @@ all_free_props_any(struct function_type function_type[static 1]) {
 
 static void
 generate_constants(
-    struct qbe_program program[static 1], struct ast_object object[static 1]
+    struct arena* arena, struct qbe_program* program,
+    struct ast_object* object
 ) {
     switch (object->type) {
         case OBJECT_TYPE_NONE:
@@ -169,7 +172,7 @@ generate_constants(
             struct ast_free_property_assign* prop_assign
                 = object->object_copy->free_properties;
             while (prop_assign != nullptr) {
-                generate_constants(program, prop_assign->value);
+                generate_constants(arena, program, prop_assign->value);
                 prop_assign = prop_assign->next;
             }
             break;
@@ -177,17 +180,17 @@ generate_constants(
         case OBJECT_TYPE_PROPERTIES: {
             struct ast_property* prop = object->properties;
             while (prop != nullptr) {
-                generate_constants(program, prop->object);
+                generate_constants(arena, program, prop->object);
                 prop = prop->next;
             }
             break;
         }
         case OBJECT_TYPE_INTEGER: {
-            generate_integer_literal(program, object);
+            generate_integer_literal(arena, program, object);
             break;
         }
         case OBJECT_TYPE_STRING: {
-            generate_string_literal(program, object);
+            generate_string_literal(arena, program, object);
             break;
         }
     }
@@ -195,8 +198,8 @@ generate_constants(
 
 void
 generate(
-    struct qbe_program program[static 1], struct ast_object root[static 1],
-    struct function_type root_type[static 1]
+    struct arena* arena, struct qbe_program* program,
+    struct ast_object* root, struct function_type* root_type
 ) {
-    generate_constants(program, root);
+    generate_constants(arena, program, root);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "defs.h"
+#include "str.h"
 
 enum qbe_stype {
     QBE_STYPE_VOID      = 'V',
@@ -18,15 +19,15 @@ struct qbe_type;
 
 struct qbe_field {
     struct qbe_type* type;
-    size count;
+    usize count;
     struct qbe_field* next;
 };
 
 struct qbe_type {
     enum qbe_stype stype;
-    size size;
+    usize size;
 
-    char* name;
+    struct string name;
     struct qbe_field fields;
     struct type* base;
 };
@@ -43,7 +44,7 @@ struct qbe_value {
     enum qbe_value_type value_type;
     struct qbe_type const* type;
     union {
-        char* name;
+        struct string name;
         u32 u32;
         u64 u64;
         f32 f32;
@@ -170,14 +171,14 @@ struct qbe_statement {
             struct qbe_value* out;
             struct qbe_argument* arguments;
         };
-        char* label;
-        char* comment;
+        struct string label;
+        struct string comment;
     };
 };
 
 struct qbe_statements {
-    size length;
-    size size;
+    usize length;
+    usize size;
     struct qbe_statement* statements;
 };
 
@@ -200,13 +201,10 @@ struct qbe_data_item {
     enum qbe_data_type data_type;
     union {
         struct qbe_value value;
-        size zeroed;
+        usize zeroed;
+        struct string string;
         struct {
-            char* string;
-            size size;
-        };
-        struct {
-            char* symbols;
+            u8* symbols;
             i64 offsets;
         };
     };
@@ -214,9 +212,9 @@ struct qbe_data_item {
 };
 
 struct qbe_data {
-    size align;
-    char* section;
-    char* section_flags;
+    usize align;
+    u8* section;
+    u8* section_flags;
     struct qbe_data_item items;
 };
 
@@ -227,7 +225,7 @@ enum qbe_definition_type {
 };
 
 struct qbe_definition {
-    char* name;
+    struct string name;
     enum qbe_definition_type definition_type;
     union {
         struct qbe_function function;

@@ -14,8 +14,7 @@ typedef int64_t i64;
 typedef float f32;
 typedef double f64;
 typedef intptr_t iptr;
-typedef char byte;
-typedef ptrdiff_t size;
+typedef uintptr_t uptr;
 typedef size_t usize;
 
-#define ALIGN_UNDEFINED ((size)-1)
+#define ALIGN_UNDEFINED ((usize)-1)

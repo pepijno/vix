@@ -1,6 +1,6 @@
 #pragma once
 
-#include "defs.h"
+#include "str.h"
 #include "utf8.h"
 #include "util.h"
 
@@ -8,7 +8,7 @@
 
 #define C_EOF UINT32_MAX
 
-extern char const* token_names[];
+extern struct string const token_names[];
 
 enum lex_token_type {
     TOKEN_NONE,
@@ -33,11 +33,8 @@ struct token {
     struct location location;
     enum lex_token_type type;
     union {
-        struct {
-            char* value;
-            i32 length;
-        } string;
-        char* name;
+        struct string string;
+        struct string name;
         char character;
         u32 integer;
     };
@@ -46,17 +43,19 @@ struct token {
 struct lexer {
     FILE* in;
     char* buffer;
-    i32 buffer_size;
-    i32 buffer_length;
+    usize buffer_size;
+    usize buffer_length;
     struct codepoint c[2];
     struct token un;
     struct location location;
 };
 
-struct lexer lexer_new(FILE* f, i32 file_id);
-void lexer_finish(struct lexer lexer[static 1]);
+struct arena;
+
+struct lexer lexer_new(struct arena* arena, FILE* f, i32 file_id);
+void lexer_finish(struct lexer* lexer);
 enum lex_token_type lex(
-    struct lexer lexer[static 1], struct token out[static 1]
+    struct arena* arena, struct lexer* lexer, struct token* out
 );
-void unlex(struct lexer lexer[static 1], struct token out[static 1]);
-void token_finish(struct token token[static 1]);
+void unlex(struct lexer* lexer, struct token* out);
+void token_finish(struct token* token);

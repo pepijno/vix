@@ -1,6 +1,7 @@
 #pragma once
 
-#include "parser.h"
+#include "defs.h"
+#include "str.h"
 
 struct function_type;
 
@@ -14,13 +15,13 @@ enum return_type {
 };
 
 struct function_param_type {
-    char* name;
+    struct string name;
     struct function_type* function_type;
     struct function_param_type* next;
 };
 
 struct return_object_property {
-    char* name;
+    struct string name;
     struct function_type* function_type;
     struct return_object_property* next;
 };
@@ -47,4 +48,7 @@ struct function_type {
 
 extern struct function_type function_types[1024];
 
-struct function_type* analyse(struct ast_object root[static 1]);
+struct arena;
+struct ast_object;
+
+struct function_type* analyse(struct arena* arena, struct ast_object* root);

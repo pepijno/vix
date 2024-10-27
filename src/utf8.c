@@ -65,7 +65,7 @@ utf8_decode(struct utf8char utf8_char) {
     if (!utf8_char.ok) {
         return CODEPOINT_INVALID;
     }
-    size length;
+    usize length;
     if ((utf8_char.characters[0] & 0x80) == 0x0) {
         cp.character = utf8_char.characters[0];
         length       = 1;
@@ -82,7 +82,7 @@ utf8_decode(struct utf8char utf8_char) {
         return CODEPOINT_INVALID;
     }
 
-    for (size i = 1; i < length; i += 1) {
+    for (usize i = 1; i < length; i += 1) {
         if ((utf8_char.characters[i] & 0xC0) != 0x80) {
             return CODEPOINT_INVALID;
         }

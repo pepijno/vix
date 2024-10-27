@@ -1,8 +1,10 @@
+#include "allocator.h"
 #include "analyser.h"
 #include "emit.h"
 #include "generator.h"
 #include "lexer.h"
 #include "parser.h"
+#include "qbe.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,26 +16,24 @@ main(i32 argc, char* argv[]) {
         exit(1);
     }
 
-    // int const arena_buffer_size = 1024 * 1024 * 16;
-    // void* arena_buffer          = malloc(arena_buffer_size);
-    // Arena arena                 = arena_init(arena_buffer,
-    // arena_buffer_size); Allocator allocator         =
-    // init_arena_allocator(&arena);
+    usize arena_buffer_size = 1024 * 1024 * 16;
+    u8* arena_buffer       = malloc(arena_buffer_size);
+    struct arena arena     = arena_init(arena_buffer, arena_buffer_size);
 
     FILE* f            = fopen(argv[1], "rb");
-    struct lexer lexer = lexer_new(f, 0);
-    sources            = calloc(2, sizeof(char**));
+    struct lexer lexer = lexer_new(&arena, f, 0);
+    sources            = arena_allocate(&arena, 2 * sizeof(char**));
     sources[0]         = argv[1];
 
-    struct ast_object* root = parse(&lexer);
+    struct ast_object* root = parse(&arena, &lexer);
     print_object(root, 0);
 
-    struct function_type* root_type = analyse(root);
+    struct function_type* root_type = analyse(&arena, root);
 
     struct qbe_program program = {};
-    program.next = &program.definitions;
+    program.next               = &program.definitions;
 
-    generate(&program, root, root_type);
+    generate(&arena, &program, root, root_type);
 
     emit(&program, stdout);
 

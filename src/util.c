@@ -1,4 +1,5 @@
 #include "util.h"
+#include "allocator.h"
 
 #include <stdarg.h>
 #define _GNU_SOURCE
@@ -28,7 +29,7 @@ vix_unreachable(void) {
 }
 
 static i32
-getline(char** lineptr, i32* n, FILE* stream) {
+getline(struct arena* arena, char** lineptr, i32* n, FILE* stream) {
     char* bufptr = NULL;
     char* p      = bufptr;
 
@@ -49,7 +50,7 @@ getline(char** lineptr, i32* n, FILE* stream) {
         return -1;
     }
     if (bufptr == NULL) {
-        bufptr = malloc(128);
+        bufptr = arena_allocate(arena, 128);
         if (bufptr == NULL) {
             return -1;
         }
@@ -58,8 +59,8 @@ getline(char** lineptr, i32* n, FILE* stream) {
     p = bufptr;
     while (c != EOF) {
         if ((p - bufptr) > (size - 1)) {
+            bufptr = arena_resize(arena, bufptr, size, size + 128);
             size   = size + 128;
-            bufptr = realloc(bufptr, size);
             if (bufptr == NULL) {
                 return -1;
             }
@@ -79,7 +80,7 @@ getline(char** lineptr, i32* n, FILE* stream) {
 }
 
 void
-error_line(struct location location) {
+error_line(struct arena* arena, struct location location) {
     char const* path = sources[location.file];
     struct stat filestat;
     if (stat((char*) path, &filestat) == -1 || !S_ISREG(filestat.st_mode)) {
@@ -95,9 +96,8 @@ error_line(struct location location) {
     i32 length = 0;
     i32 n      = 0;
     while (n < location.line_number) {
-        if ((length = getline(&line, &size, src)) == -1) {
+        if ((length = getline(arena, &line, &size, src)) == -1) {
             fclose(src);
-            free(line);
             return;
         }
         n += 1;
@@ -111,8 +111,6 @@ error_line(struct location location) {
             line[length - 1] == '\n' ? "" : "\n", line_number_width, ' ',
             location.column_number - 1, ' '
         );
-
-        free(line);
     }
 
     fclose(src);

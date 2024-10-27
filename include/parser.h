@@ -1,6 +1,7 @@
 #pragma once
 
-#include "lexer.h"
+#include "defs.h"
+#include "str.h"
 
 struct ast_free_property;
 struct ast_property;
@@ -23,7 +24,7 @@ struct ast_object {
         struct ast_object_copy* object_copy;
         struct ast_property* properties;
         u64 integer;
-        char* string;
+        struct string string;
     };
 };
 
@@ -33,22 +34,25 @@ struct ast_free_property_assign {
 };
 
 struct ast_object_copy {
-    char* name;
+    struct string name;
     struct ast_free_property_assign* free_properties;
     struct ast_object_copy* next;
 };
 
 struct ast_free_property {
     u32 id;
-    char* name;
+    struct string name;
     struct ast_free_property* next;
 };
 
 struct ast_property {
-    char* name;
+    struct string name;
     struct ast_object* object;
     struct ast_property* next;
 };
 
-struct ast_object* parse(struct lexer lexer[static 1]);
-void print_object(struct ast_object* object, size indent);
+struct arena;
+struct lexer;
+
+struct ast_object* parse(struct arena* arena, struct lexer* lexer);
+void print_object(struct ast_object* object, usize indent);

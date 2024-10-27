@@ -7,9 +7,7 @@
 #include <stdlib.h>
 
 static void
-emit_qtype(
-    struct qbe_type const type[static 1], bool aggregate, FILE out[static 1]
-) {
+emit_qtype(struct qbe_type const* type, bool aggregate, FILE* out) {
     switch (type->stype) {
         case QBE_STYPE_VOID:
             break;
@@ -24,7 +22,7 @@ emit_qtype(
         case QBE_STYPE_AGGREGATE:
         case QBE_STYPE_UNION:
             if (aggregate) {
-                fprintf(out, ":%s", type->name);
+                fprintf(out, ":%s", type->name.buffer);
             } else {
                 fprintf(out, "l");
             }
@@ -36,7 +34,7 @@ void
 qemit_type(struct qbe_definition definition[static 1], FILE out[static 1]) {
     assert(definition->definition_type == QBE_DEFINITION_TYPE_TYPE);
     struct qbe_type* type = &definition->type;
-    fprintf(out, "type :%s =", definition->name);
+    fprintf(out, "type :%s =", definition->name.buffer);
     fprintf(out, " {");
 
     struct qbe_field* field = &definition->type.fields;
@@ -89,13 +87,13 @@ emit_value(struct qbe_value value[static 1], FILE out[static 1]) {
             emit_constant(value, out);
             break;
         case QBE_VALUE_TYPE_GLOBAL:
-            fprintf(out, "$%s", value->name);
+            fprintf(out, "$%s", value->name.buffer);
             break;
         case QBE_VALUE_TYPE_LABEL:
-            fprintf(out, "@%s", value->name);
+            fprintf(out, "@%s", value->name.buffer);
             break;
         case QBE_VALUE_TYPE_TEMPORARY:
-            fprintf(out, "%%%s", value->name);
+            fprintf(out, "%%%s", value->name.buffer);
             break;
         case QBE_VALUE_TYPE_VARIADIC:
             fprintf(out, "...");
@@ -132,8 +130,8 @@ is_zeroes(struct qbe_data_item item[static 1]) {
                 }
                 break;
             case QBE_DATA_TYPE_STRINGS:
-                for (size i = 0; i < current->size; i += 1) {
-                    if (current->string[i] != 0) {
+                for (usize i = 0; i < current->string.length; i += 1) {
+                    if (current->string.buffer[i] != 0) {
                         return false;
                     }
                 }
@@ -146,22 +144,22 @@ is_zeroes(struct qbe_data_item item[static 1]) {
 }
 
 static void
-emit_data_string(char* string, size s, FILE out[static 1]) {
+emit_data_string(struct string string, FILE out[static 1]) {
     bool q = false;
-    for (size i = 0; i < s; i += 1) {
-        if (!isprint((unsigned char) (string[i])) || string[i] == '"'
-            || string[i] == '\\') {
+    for (usize i = 0; i < string.length; i += 1) {
+        if (!isprint((unsigned char) (string.buffer[i])) || string.buffer[i] == '"'
+            || string.buffer[i] == '\\') {
             if (q) {
                 q = false;
                 fprintf(out, "\", ");
             }
-            fprintf(out, "b %d%s", string[i], i + 1 < s ? ", " : "");
+            fprintf(out, "b %d%s", string.buffer[i], i + 1 < string.length ? ", " : "");
         } else {
             if (!q) {
                 q = true;
                 fprintf(out, "b \"");
             }
-            fprintf(out, "%c", string[i]);
+            fprintf(out, "%c", string.buffer[i]);
         }
     }
     if (q) {
@@ -181,12 +179,12 @@ qemit_data(struct qbe_definition definition[static 1], FILE out[static 1]) {
     } else if (definition->data.section != nullptr) {
         fprintf(out, "section \"%s\"", definition->data.section);
     } else if (is_zeroes(&definition->data.items)) {
-        fprintf(out, "section \".bss.%s\"", definition->name);
+        fprintf(out, "section \".bss.%s\"", definition->name.buffer);
     } else {
-        fprintf(out, "section \".data.%s\"", definition->name);
+        fprintf(out, "section \".data.%s\"", definition->name.buffer);
     }
     fprintf(out, "\n");
-    fprintf(out, "data $%s = ", definition->name);
+    fprintf(out, "data $%s = ", definition->name.buffer);
     if (definition->data.align != ALIGN_UNDEFINED) {
         fprintf(out, "align %zu ", definition->data.align);
     }
@@ -204,7 +202,7 @@ qemit_data(struct qbe_definition definition[static 1], FILE out[static 1]) {
                 emit_value(&item->value, out);
                 break;
             case QBE_DATA_TYPE_STRINGS:
-                emit_data_string(item->string, item->size, out);
+                emit_data_string(item->string, out);
                 break;
             case QBE_DATA_TYPE_SYMBOLS_OFFSETS:
                 fprintf(out, "l $%s + %li", item->symbols, item->offsets);
