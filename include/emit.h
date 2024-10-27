@@ -5,4 +5,3 @@
 struct qbe_program;
 
 void emit(struct qbe_program* program, FILE* out);
-

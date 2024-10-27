@@ -2,8 +2,8 @@
 
 #include "allocator.h"
 #include "analyser.h"
-#include "qbe.h"
 #include "parser.h"
+#include "qbe.h"
 #include "util.h"
 
 #include <assert.h>
@@ -14,7 +14,7 @@ u32 id = 0;
 
 static struct string
 generate_name(struct arena* arena, char const* format) {
-    i32 n      = snprintf(nullptr, 0, format, id);
+    i32 n        = snprintf(nullptr, 0, format, id);
     char* buffer = arena_allocate(arena, n + 1);
     snprintf(buffer, n + 1, format, id);
     id += 1;
@@ -26,8 +26,8 @@ generate_name(struct arena* arena, char const* format) {
 
 static void
 generate_data_item(
-    struct arena* arena, struct qbe_program* program,
-    struct ast_object* object, struct qbe_data_item* item
+    struct arena* arena, struct qbe_program* program, struct ast_object* object,
+    struct qbe_data_item* item
 ) {
     struct qbe_definition* definition;
 
@@ -38,7 +38,7 @@ generate_data_item(
             break;
         }
         case OBJECT_TYPE_STRING: {
-            definition       = arena_allocate(arena, sizeof(struct qbe_definition));
+            definition = arena_allocate(arena, sizeof(struct qbe_definition));
             definition->name = generate_name(arena, "string_data.%d");
             definition->definition_type      = QBE_DEFINITION_TYPE_DATA;
             definition->data.align           = ALIGN_UNDEFINED;
@@ -51,19 +51,18 @@ generate_data_item(
                 qbe_append_definition(program, definition);
                 item->value.value_type = QBE_VALUE_TYPE_GLOBAL;
                 item->value.type       = &qbe_long;
-                item->value.name
-                    = string_duplicate(arena, definition->name);
+                item->value.name = string_duplicate(arena, definition->name);
             } else {
                 item->value = const_u64(0);
             }
 
-            item->next      = arena_allocate(arena, sizeof(struct qbe_data_item));
-            item            = item->next;
+            item->next = arena_allocate(arena, sizeof(struct qbe_data_item));
+            item       = item->next;
             item->data_type = QBE_DATA_TYPE_VALUE;
             item->value     = const_u64(object->string.length + 1);
 
-            item->next      = arena_allocate(arena, sizeof(struct qbe_data_item));
-            item            = item->next;
+            item->next = arena_allocate(arena, sizeof(struct qbe_data_item));
+            item       = item->next;
             item->data_type = QBE_DATA_TYPE_VALUE;
             item->value     = const_u64(object->string.length + 1);
             break;
@@ -77,8 +76,7 @@ generate_data_item(
 
 static void
 generate_string_literal(
-    struct arena* arena, struct qbe_program* program,
-    struct ast_object* object
+    struct arena* arena, struct qbe_program* program, struct ast_object* object
 ) {
     assert(object->type == OBJECT_TYPE_STRING);
     struct qbe_definition* definition
@@ -93,8 +91,7 @@ generate_string_literal(
 
 static void
 generate_integer_literal(
-    struct arena* arena, struct qbe_program* program,
-    struct ast_object* object
+    struct arena* arena, struct qbe_program* program, struct ast_object* object
 ) {
     assert(object->type == OBJECT_TYPE_INTEGER);
     struct qbe_definition* definition
@@ -162,8 +159,7 @@ all_free_props_any(struct function_type* function_type) {
 
 static void
 generate_constants(
-    struct arena* arena, struct qbe_program* program,
-    struct ast_object* object
+    struct arena* arena, struct qbe_program* program, struct ast_object* object
 ) {
     switch (object->type) {
         case OBJECT_TYPE_NONE:
@@ -198,8 +194,8 @@ generate_constants(
 
 void
 generate(
-    struct arena* arena, struct qbe_program* program,
-    struct ast_object* root, struct function_type* root_type
+    struct arena* arena, struct qbe_program* program, struct ast_object* root,
+    struct function_type* root_type
 ) {
     generate_constants(arena, program, root);
 }

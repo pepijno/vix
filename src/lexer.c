@@ -277,10 +277,13 @@ lex_name(struct arena* arena, struct lexer* lexer, struct token* out) {
     }
 
     out->type = TOKEN_NAME;
-    out->name = string_duplicate(arena, (struct string){
-        .buffer = lexer->buffer,
-        .length = lexer->buffer_length,
-    });
+    out->name = string_duplicate(
+        arena,
+        (struct string){
+            .buffer = lexer->buffer,
+            .length = lexer->buffer_length,
+        }
+    );
     lexer_clear_buffer(lexer);
 }
 
@@ -457,7 +460,9 @@ lex(struct arena* arena, struct lexer* lexer, struct token* out) {
                             out->type = TOKEN_DOT;
                             break;
                         default:
-                            error(arena, lexer->location, "Unknown sequence '..'");
+                            error(
+                                arena, lexer->location, "Unknown sequence '..'"
+                            );
                     }
                     break;
                 default:
@@ -491,7 +496,9 @@ lex(struct arena* arena, struct lexer* lexer, struct token* out) {
             out->type = TOKEN_SEMICOLON;
             break;
         default:
-            error(arena, lexer->location, "Unexpected character '%d'", character);
+            error(
+                arena, lexer->location, "Unexpected character '%d'", character
+            );
     }
 
     return out->type;

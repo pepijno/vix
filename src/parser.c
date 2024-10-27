@@ -72,8 +72,9 @@ parse_free_properties(
     struct arena* arena, struct lexer* lexer,
     struct ast_free_property* free_property
 ) {
-    free_property->next = arena_allocate(arena, sizeof(struct ast_free_property));
-    struct token token  = {};
+    free_property->next
+        = arena_allocate(arena, sizeof(struct ast_free_property));
+    struct token token              = {};
     struct ast_free_property** next = &free_property->next;
     while (true) {
         switch (lex(arena, lexer, &token)) {
@@ -81,14 +82,17 @@ parse_free_properties(
                 (*next)->name = string_duplicate(arena, token.name);
                 (*next)->id   = id;
                 id += 1;
-                (*next)->next = arena_allocate(arena, sizeof(struct ast_free_property));
-                next          = &(*next)->next;
+                (*next)->next
+                    = arena_allocate(arena, sizeof(struct ast_free_property));
+                next = &(*next)->next;
                 break;
             case TOKEN_GREATER_THAN:
                 *next = nullptr;
                 return;
             default:
-                synerror(arena, &token, TOKEN_GREATER_THAN, TOKEN_NAME, TOKEN_EOF);
+                synerror(
+                    arena, &token, TOKEN_GREATER_THAN, TOKEN_NAME, TOKEN_EOF
+                );
         }
     }
 
@@ -110,7 +114,8 @@ parse_object_copies(
     while (cont) {
         switch (lex(arena, lexer, &token)) {
             case TOKEN_DOT: {
-                (*next)->next       = arena_allocate(arena, sizeof(struct ast_object_copy));
+                (*next)->next
+                    = arena_allocate(arena, sizeof(struct ast_object_copy));
                 next                = &(*next)->next;
                 struct token token2 = {};
                 expect_token(arena, lexer, TOKEN_NAME, &token2);
@@ -118,8 +123,9 @@ parse_object_copies(
                 break;
             }
             case TOKEN_OPEN_PAREN: {
-                (*next)->free_properties
-                    = arena_allocate(arena, sizeof(struct ast_free_property_assign));
+                (*next)->free_properties = arena_allocate(
+                    arena, sizeof(struct ast_free_property_assign)
+                );
                 struct ast_free_property_assign** next_free_property_assign
                     = &(*next)->free_properties;
                 struct token token2      = {};
@@ -131,8 +137,9 @@ parse_object_copies(
                     unlex(lexer, &token2);
                     (*next_free_property_assign)->value
                         = parse_object(arena, lexer, parent);
-                    (*next_free_property_assign)->next
-                        = arena_allocate(arena, sizeof(struct ast_free_property_assign));
+                    (*next_free_property_assign)->next = arena_allocate(
+                        arena, sizeof(struct ast_free_property_assign)
+                    );
                     next_free_property_assign
                         = &(*next_free_property_assign)->next;
                 }
@@ -188,9 +195,10 @@ static struct ast_object*
 parse_object(
     struct arena* arena, struct lexer* lexer, struct ast_object* parent
 ) {
-    struct token token        = {};
-    struct ast_object* object = arena_allocate(arena, sizeof(struct ast_object));
-    object->id                = id;
+    struct token token = {};
+    struct ast_object* object
+        = arena_allocate(arena, sizeof(struct ast_object));
+    object->id = id;
     id += 1;
     object->parent = parent;
 
@@ -202,8 +210,9 @@ parse_object(
             switch (t) {
                 case TOKEN_NAME: { // more than one free property
                     unlex(lexer, &token2);
-                    object->free_properties
-                        = arena_allocate(arena, sizeof(struct ast_free_property));
+                    object->free_properties = arena_allocate(
+                        arena, sizeof(struct ast_free_property)
+                    );
                     object->free_properties->name
                         = string_duplicate(arena, token.name);
                     object->free_properties->id = id;
@@ -214,8 +223,9 @@ parse_object(
                     break;
                 }
                 case TOKEN_GREATER_THAN: { // only one free property
-                    object->free_properties
-                        = arena_allocate(arena, sizeof(struct ast_free_property));
+                    object->free_properties = arena_allocate(
+                        arena, sizeof(struct ast_free_property)
+                    );
                     object->free_properties->name
                         = string_duplicate(arena, token.name);
                     object->free_properties->id = id;
@@ -228,8 +238,7 @@ parse_object(
                     struct ast_object_copy* object_copy
                         = arena_allocate(arena, sizeof(struct ast_object_copy));
                     object->object_copy = object_copy;
-                    object_copy->name
-                        = string_duplicate(arena, token.name);
+                    object_copy->name   = string_duplicate(arena, token.name);
                     parse_object_copies(arena, lexer, object_copy, object);
                     break;
                 }
@@ -256,7 +265,8 @@ parse_object(
         case TOKEN_OPEN_BRACE: {
             object->type        = OBJECT_TYPE_PROPERTIES;
             struct token token2 = {};
-            object->properties  = arena_allocate(arena, sizeof(struct ast_property));
+            object->properties
+                = arena_allocate(arena, sizeof(struct ast_property));
             struct ast_property** next_property = &object->properties;
             bool break_out                      = false;
             while (!break_out) {
@@ -268,8 +278,9 @@ parse_object(
                     default:
                         unlex(lexer, &token2);
                         *next_property = parse_property(arena, lexer, object);
-                        (*next_property)->next
-                            = arena_allocate(arena, sizeof(struct ast_property));
+                        (*next_property)->next = arena_allocate(
+                            arena, sizeof(struct ast_property)
+                        );
                         next_property = &(*next_property)->next;
                         break;
                 }
@@ -303,8 +314,9 @@ parse_property(
         unlex(lexer, &token);
         return nullptr;
     }
-    struct ast_property* property = arena_allocate(arena, sizeof(struct ast_property));
-    property->name                = string_duplicate(arena, token.name);
+    struct ast_property* property
+        = arena_allocate(arena, sizeof(struct ast_property));
+    property->name = string_duplicate(arena, token.name);
 
     expect_token(arena, lexer, TOKEN_ASSIGN, nullptr);
 
@@ -329,8 +341,9 @@ parse_root(struct arena* arena, struct lexer* lexer) {
         if (*next_property == nullptr) {
             break;
         }
-        (*next_property)->next = arena_allocate(arena, sizeof(struct ast_property));
-        next_property          = &(*next_property)->next;
+        (*next_property)->next
+            = arena_allocate(arena, sizeof(struct ast_property));
+        next_property = &(*next_property)->next;
     }
     *next_property = nullptr;
     return root;

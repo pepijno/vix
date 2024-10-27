@@ -4,7 +4,8 @@
 
 #include <string.h>
 
-struct string create_from_cstring(char* str) {
+struct string
+create_from_cstring(char* str) {
     return (struct string){
         .length = strlen(str),
         .buffer = str,

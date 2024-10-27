@@ -6,13 +6,13 @@
 #include <stdio.h>
 
 #define UTF8_MAX_SIZE 4
-#define CODEPOINT_INVALID  \
-    (struct codepoint) { \
-        .ok = false        \
-    }
-#define UTF8_INVALID      \
-    (struct utf8char) { \
+#define CODEPOINT_INVALID \
+    (struct codepoint) {  \
         .ok = false       \
+    }
+#define UTF8_INVALID    \
+    (struct utf8char) { \
+        .ok = false     \
     }
 
 struct __attribute__((packed)) utf8char {

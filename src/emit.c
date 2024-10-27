@@ -147,13 +147,16 @@ static void
 emit_data_string(struct string string, FILE out[static 1]) {
     bool q = false;
     for (usize i = 0; i < string.length; i += 1) {
-        if (!isprint((unsigned char) (string.buffer[i])) || string.buffer[i] == '"'
-            || string.buffer[i] == '\\') {
+        if (!isprint((unsigned char) (string.buffer[i]))
+            || string.buffer[i] == '"' || string.buffer[i] == '\\') {
             if (q) {
                 q = false;
                 fprintf(out, "\", ");
             }
-            fprintf(out, "b %d%s", string.buffer[i], i + 1 < string.length ? ", " : "");
+            fprintf(
+                out, "b %d%s", string.buffer[i],
+                i + 1 < string.length ? ", " : ""
+            );
         } else {
             if (!q) {
                 q = true;

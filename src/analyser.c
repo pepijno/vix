@@ -51,15 +51,17 @@ static struct function_type*
 update_types(struct arena* arena, struct ast_object object[static 1]) {
     struct function_type* type = &function_types[object->id];
 
-    type->param_types = arena_allocate(arena, sizeof(struct function_param_type));
-    type->id          = object->id;
+    type->param_types
+        = arena_allocate(arena, sizeof(struct function_param_type));
+    type->id                            = object->id;
     struct function_param_type** next   = &type->param_types;
     struct ast_free_property* free_prop = object->free_properties;
     while (free_prop != nullptr) {
         (*next)->name = string_duplicate(arena, free_prop->name);
-        (*next)->next          = arena_allocate(arena, sizeof(struct function_param_type));
-        (*next)->function_type = &function_types[free_prop->id];
-        (*next)->function_type->id                      = free_prop->id;
+        (*next)->next
+            = arena_allocate(arena, sizeof(struct function_param_type));
+        (*next)->function_type     = &function_types[free_prop->id];
+        (*next)->function_type->id = free_prop->id;
         (*next)->function_type->return_type.return_type = RETURN_ANY;
         next                                            = &(*next)->next;
         free_prop                                       = free_prop->next;
@@ -115,7 +117,8 @@ update_types(struct arena* arena, struct ast_object object[static 1]) {
                             break;
                         }
                     }
-                    last->next       = arena_allocate(arena, sizeof(struct function_union));
+                    last->next
+                        = arena_allocate(arena, sizeof(struct function_union));
                     last->next->type = &function_types[free_assign->value->id];
                     last->next->next = nullptr;
                 } else {
@@ -141,8 +144,9 @@ update_types(struct arena* arena, struct ast_object object[static 1]) {
 
                 (*next_prop)->function_type = update_types(arena, prop->object);
 
-                (*next_prop)->next
-                    = arena_allocate(arena, sizeof(struct return_object_property));
+                (*next_prop)->next = arena_allocate(
+                    arena, sizeof(struct return_object_property)
+                );
                 next_prop = &(*next_prop)->next;
                 prop      = prop->next;
             }
@@ -189,7 +193,10 @@ print_types(struct function_type* type, u8 indent) {
         printf("%*sfrees:\n", indent, "");
         struct function_param_type* param_type = type->param_types;
         while (param_type != nullptr) {
-            printf("%*s  %d %s:\n", indent, "", param_type->function_type->id, param_type->name.buffer);
+            printf(
+                "%*s  %d %s:\n", indent, "", param_type->function_type->id,
+                param_type->name.buffer
+            );
             print_types(param_type->function_type, indent + 4);
             param_type = param_type->next;
         }
@@ -202,7 +209,10 @@ print_types(struct function_type* type, u8 indent) {
     if (type->return_type.return_type == RETURN_OBJECT) {
         struct return_object_property* prop = type->return_type.properties;
         while (prop != nullptr) {
-            printf("%*s  %d %s:\n", indent, "", prop->function_type->id, prop->name.buffer);
+            printf(
+                "%*s  %d %s:\n", indent, "", prop->function_type->id,
+                prop->name.buffer
+            );
             print_types(prop->function_type, indent + 4);
             prop = prop->next;
         }

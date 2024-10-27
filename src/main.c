@@ -17,8 +17,8 @@ main(i32 argc, char* argv[]) {
     }
 
     usize arena_buffer_size = 1024 * 1024 * 16;
-    u8* arena_buffer       = malloc(arena_buffer_size);
-    struct arena arena     = arena_init(arena_buffer, arena_buffer_size);
+    u8* arena_buffer        = malloc(arena_buffer_size);
+    struct arena arena      = arena_init(arena_buffer, arena_buffer_size);
 
     FILE* f            = fopen(argv[1], "rb");
     struct lexer lexer = lexer_new(&arena, f, 0);

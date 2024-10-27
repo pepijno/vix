@@ -17,4 +17,4 @@ typedef intptr_t iptr;
 typedef uintptr_t uptr;
 typedef size_t usize;
 
-#define ALIGN_UNDEFINED ((usize)-1)
+#define ALIGN_UNDEFINED ((usize) - 1)

@@ -48,7 +48,8 @@ set_color_posix(enum term_color color) {
 
 static void
 print_error_message_type(
-    struct error_message error_message[static 1], enum error_color color, enum error_type error_type
+    struct error_message error_message[static 1], enum error_color color,
+    enum error_type error_type
 ) {
     char const* path = error_message->path;
     i32 line         = error_message->line_start + 1;
@@ -105,7 +106,9 @@ print_error_message_type(
 }
 
 void
-print_error_message(struct error_message error_message[static 1], enum error_color color) {
+print_error_message(
+    struct error_message error_message[static 1], enum error_color color
+) {
     print_error_message_type(error_message, color, ERROR_TYPE_ERROR);
 }
 
