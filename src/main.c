@@ -4,6 +4,8 @@
 #include "emit.h"
 #include "generator.h"
 #include "lexer.h"
+#include "parser.h"
+#include "scope.h"
 #include "qbe.h"
 
 #include <stdio.h>
@@ -16,7 +18,7 @@ main(i32 argc, char* argv[]) {
         exit(1);
     }
 
-    usize arena_buffer_size = 1024 * 1024 * 16;
+    usize arena_buffer_size = 1024 * 1024 * 128;
     u8* arena_buffer        = malloc(arena_buffer_size);
     struct arena arena      = arena_init(arena_buffer, arena_buffer_size);
 
@@ -26,10 +28,16 @@ main(i32 argc, char* argv[]) {
     sources[0]         = from_cstr(argv[1]);
 
     struct ast_object* root = parse(&arena, &lexer);
+    // print_object(root, 0);
+
+    struct context context = {
+        .arena = &arena,
+        .scope = nullptr,
+    };
+    analyse(&context, root);
+
     print_object(root, 0);
 
-    // struct function_type* root_type = analyse(&arena, root);
-    //
     // struct qbe_program program = {};
     // program.next               = &program.definitions;
     //

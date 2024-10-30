@@ -25,7 +25,7 @@ strings_equal(struct string const s1, struct string const s2) {
 }
 
 struct string
-string_init_empty(struct arena* arena, usize size) {
+string_init_empty(struct arena* arena, usize const size) {
     return (struct string){
         .data = arena_allocate(arena, size * sizeof(char)),
         .length = size,
@@ -33,7 +33,7 @@ string_init_empty(struct arena* arena, usize size) {
 }
 
 struct string
-string_grow(struct arena* arena, struct string string, usize new_size) {
+string_grow(struct arena* arena, struct string const string, usize const new_size) {
     struct string new_string = string_init_empty(arena, new_size);
     memcpy(new_string.data, string.data, string.length);
     return new_string;

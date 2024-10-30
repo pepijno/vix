@@ -2,21 +2,50 @@
 
 #include "defs.h"
 
-struct ast_free_property;
+struct ast_type;
+
+struct ast_object_property_type {
+    struct string name;
+    struct ast_type* type;
+    struct ast_object_property_type* next;
+};
+
+struct ast_union_type {
+    struct ast_type* type;
+    struct ast_union_type* next;
+};
+
+enum ast_stype {
+    AST_STYPE_ANY,
+    AST_STYPE_COPY,
+    AST_STYPE_OBJECT,
+    AST_STYPE_UNION,
+    AST_STYPE_ALIAS,
+};
+
+enum ast_extra_stype {
+    AST_EXTRA_STYPE_NONE,
+    AST_EXTRA_STYPE_INTEGER,
+    AST_EXTRA_STYPE_STRING,
+};
+
+struct ast_type {
+    enum ast_stype type;
+    enum ast_extra_stype extra_type;
+    union {
+        struct ast_object_property_type* object_types;
+        struct ast_union_type* union_type;
+        u32 alias_id;
+    };
+};
+
 struct ast_property;
 struct ast_object_copy;
 
-enum ast_object_alias {
-    AST_OBJECT_ALIAS_NONE,
-    AST_OBJECT_ALIAS_INTEGER,
-    AST_OBJECT_ALIAS_STRING,
-    AST_OBJECT_ALIAS_OBJECT_COPY,
-    AST_OBJECT_ALIAS_ANY,
-};
-
 struct ast_object {
     u32 id;
-    enum ast_object_alias alias;
+    struct ast_object* parent;
+    struct ast_type type;
     struct ast_property* properties;
     union {
         struct ast_object_copy* object_copy;
@@ -48,9 +77,3 @@ struct ast_property {
     struct ast_object* object;
     struct ast_property* next;
 };
-
-struct arena;
-struct lexer;
-
-struct ast_object* parse(struct arena* arena, struct lexer* lexer);
-void print_object(struct ast_object* object, usize indent);

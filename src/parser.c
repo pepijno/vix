@@ -1,3 +1,5 @@
+#include "parser.h"
+
 #include "allocator.h"
 #include "ast.h"
 #include "lexer.h"
@@ -6,26 +8,139 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 
+struct parser_entry* buckets[BUCKET_SIZE];
+
+static void
+buckets_insert_object(struct arena* arena, struct ast_object* object) {
+    struct parser_entry* entry
+        = arena_allocate(arena, sizeof(struct parser_entry));
+    entry->type   = PARSER_ENTRY_TYPE_OBJECT;
+    entry->object = object;
+
+    struct parser_entry** bucket = &buckets[object->id % BUCKET_SIZE];
+    if (*bucket != nullptr) {
+        entry->next = *bucket;
+    }
+    *bucket = entry;
+}
+
+static void
+buckets_insert_property(struct arena* arena, struct ast_property* property) {
+    struct parser_entry* entry
+        = arena_allocate(arena, sizeof(struct parser_entry));
+    entry->type     = PARSER_ENTRY_TYPE_PROPERTY;
+    entry->property = property;
+
+    struct parser_entry** bucket = &buckets[property->id % BUCKET_SIZE];
+    if (*bucket != nullptr) {
+        entry->next = *bucket;
+    }
+    *bucket = entry;
+}
+
 static u32 id = 0;
 
 static struct ast_object*
-create_object(struct arena* arena) {
+create_object(struct arena* arena, struct ast_object* parent) {
     struct ast_object* new_object
         = arena_allocate(arena, sizeof(struct ast_object));
-    new_object->alias = AST_OBJECT_ALIAS_NONE;
-    new_object->id    = id;
+    new_object->type.type   = AST_STYPE_OBJECT;
+    new_object->object_copy = nullptr;
+    new_object->parent      = parent;
+    new_object->id          = id;
     id += 1;
+    buckets_insert_object(arena, new_object);
     return new_object;
 }
 
 static struct ast_property*
-create_property(struct arena* arena, enum ast_property_type type) {
+add_property(
+    struct arena* arena, struct ast_object* object, enum ast_property_type type
+) {
     struct ast_property* new_property
         = arena_allocate(arena, sizeof(struct ast_property));
     new_property->type = type;
     new_property->id   = id;
     id += 1;
+    buckets_insert_property(arena, new_property);
+
+    struct ast_property* property = object->properties;
+    if (property == nullptr) {
+        object->properties = new_property;
+    } else {
+        while (property != nullptr) {
+            if (property->next == nullptr) {
+                break;
+            }
+            property = property->next;
+        }
+        property->next = new_property;
+    }
     return new_property;
+}
+
+static struct ast_object_property_type*
+add_type_object_type(struct arena* arena, struct ast_object* object) {
+    struct ast_object_property_type* new_type
+        = arena_allocate(arena, sizeof(struct ast_object_property_type));
+    new_type->type = arena_allocate(arena, sizeof(struct ast_type));
+
+    struct ast_object_property_type* type = object->type.object_types;
+    if (type == nullptr) {
+        object->type.object_types = new_type;
+    } else {
+        while (type != nullptr) {
+            if (type->next == nullptr) {
+                break;
+            }
+            type = type->next;
+        }
+        type->next = new_type;
+    }
+    return new_type;
+}
+
+static struct ast_object_copy*
+add_object_copy(struct arena* arena, struct ast_object* object) {
+    struct ast_object_copy* new_object_copy
+        = arena_allocate(arena, sizeof(struct ast_object_copy));
+
+    struct ast_object_copy* object_copy = object->object_copy;
+    if (object_copy == nullptr) {
+        object->object_copy = new_object_copy;
+    } else {
+        while (object_copy != nullptr) {
+            if (object_copy->next == nullptr) {
+                break;
+            }
+            object_copy = object_copy->next;
+        }
+        object_copy->next = new_object_copy;
+    }
+    return new_object_copy;
+}
+
+static struct ast_free_property_assign*
+add_free_property_assign(
+    struct arena* arena, struct ast_object_copy* object_copy
+) {
+    struct ast_free_property_assign* new_free_property_assign
+        = arena_allocate(arena, sizeof(struct ast_free_property_assign));
+
+    struct ast_free_property_assign* free_property_assign
+        = object_copy->free_properties;
+    if (free_property_assign == nullptr) {
+        object_copy->free_properties = new_free_property_assign;
+    } else {
+        while (free_property_assign != nullptr) {
+            if (free_property_assign->next == nullptr) {
+                break;
+            }
+            free_property_assign = free_property_assign->next;
+        }
+        free_property_assign->next = new_free_property_assign;
+    }
+    return new_free_property_assign;
 }
 
 static noreturn void
@@ -87,64 +202,49 @@ expect_token(
 }
 
 static struct ast_object* parse_object(
-    struct arena* arena, struct lexer* lexer
+    struct arena* arena, struct lexer* lexer, struct ast_object* parent
 );
 
 static void
 parse_object_copies(
-    struct arena* arena, struct lexer* lexer,
-    struct ast_object_copy* object_copy
+    struct arena* arena, struct lexer* lexer, struct ast_object* object,
+    struct ast_object_copy* object_copy, struct ast_object* parent
 ) {
-    struct ast_object_copy** next = &object_copy;
-    struct token token            = {};
-    bool cont                     = true;
+    struct token token = {};
+    bool cont          = true;
     while (cont) {
         switch (lex(arena, lexer, &token)) {
             case TOKEN_DOT: {
-                (*next)->next
-                    = arena_allocate(arena, sizeof(struct ast_object_copy));
-                next                = &(*next)->next;
+                object_copy         = add_object_copy(arena, object);
                 struct token token2 = {};
                 expect_token(arena, lexer, TOKEN_NAME, &token2);
-                (*next)->name = string_duplicate(arena, token2.name);
+                object_copy->name = string_duplicate(arena, token2.name);
                 break;
             }
             case TOKEN_OPEN_PAREN: {
-                (*next)->free_properties = arena_allocate(
-                    arena, sizeof(struct ast_free_property_assign)
-                );
-                struct ast_free_property_assign** next_free_property_assign
-                    = &(*next)->free_properties;
                 struct token token2      = {};
                 enum lex_token_type type = lex(arena, lexer, &token2);
                 if (type == TOKEN_CLOSE_PAREN) {
-                    *next_free_property_assign = nullptr;
                     break;
                 } else {
                     unlex(lexer, &token2);
-                    (*next_free_property_assign)->value
-                        = parse_object(arena, lexer);
-                    (*next_free_property_assign)->next = arena_allocate(
-                        arena, sizeof(struct ast_free_property_assign)
-                    );
-                    next_free_property_assign
-                        = &(*next_free_property_assign)->next;
+                    struct ast_free_property_assign* next_free_property_assign
+                        = add_free_property_assign(arena, object_copy);
+                    next_free_property_assign->value
+                        = parse_object(arena, lexer, parent);
                 }
                 bool break_out = false;
                 while (!break_out) {
                     switch (lex(arena, lexer, &token2)) {
                         case TOKEN_CLOSE_PAREN:
-                            *next_free_property_assign = nullptr;
-                            break_out                  = true;
+                            break_out = true;
                             break;
                         case TOKEN_COMMA:
-                            (*next_free_property_assign)->value
-                                = parse_object(arena, lexer);
-                            (*next_free_property_assign)->next = arena_allocate(
-                                arena, sizeof(struct ast_free_property_assign)
-                            );
-                            next_free_property_assign
-                                = &(*next_free_property_assign)->next;
+                            struct ast_free_property_assign*
+                                next_free_property_assign
+                                = add_free_property_assign(arena, object_copy);
+                            next_free_property_assign->value
+                                = parse_object(arena, lexer, parent);
                             break;
                         default:
                             synerror(
@@ -173,21 +273,19 @@ parse_object_copies(
 }
 
 static struct ast_property* parse_property(
-    struct arena* arena, struct lexer* lexer
+    struct arena* arena, struct lexer* lexer, struct ast_object* parent
 );
 
 // object ::= (identifier+ ">")? (("{" (property)* "}") | object_copy |
 // primitive)
 static struct ast_object*
-parse_object(struct arena* arena, struct lexer* lexer) {
+parse_object(
+    struct arena* arena, struct lexer* lexer, struct ast_object* parent
+) {
     struct token token        = {};
-    struct ast_object* object = create_object(arena);
+    struct ast_object* object = create_object(arena, parent);
 
-    object->properties = create_property(arena, AST_PROPERTY_TYPE_NON_FREE);
-    struct ast_property** next = &object->properties;
-
-    enum lex_token_type tt = lex(arena, lexer, &token);
-    switch (tt) {
+    switch (lex(arena, lexer, &token)) {
         case TOKEN_NAME: {
             // name can mean both identifiers or object copy
             struct token token2   = {};
@@ -196,28 +294,43 @@ parse_object(struct arena* arena, struct lexer* lexer) {
                 case TOKEN_NAME: { // more than one free property
                     unlex(lexer, &token2);
 
-                    (*next)->type   = AST_PROPERTY_TYPE_FREE;
-                    (*next)->name   = string_duplicate(arena, token.name);
-                    (*next)->object = create_object(arena);
-                    (*next)->object->alias = AST_OBJECT_ALIAS_ANY;
-                    (*next)->next
-                        = create_property(arena, AST_PROPERTY_TYPE_FREE);
-                    next = &(*next)->next;
+                    struct ast_property* next = add_property(
+                        arena, object, AST_PROPERTY_TYPE_NON_FREE
+                    );
+                    next->type   = AST_PROPERTY_TYPE_FREE;
+                    next->name   = string_duplicate(arena, token.name);
+                    next->object = create_object(arena, object);
+                    next->object->type.type = AST_STYPE_ANY;
+
+                    struct ast_object_property_type* next_type
+                        = add_type_object_type(arena, object);
+
+                    next_type->name       = string_duplicate(arena, token.name);
+                    next_type->type->type = AST_STYPE_ALIAS;
+                    next_type->type->alias_id = next->id;
 
                     struct token token3 = {};
                     bool break_out      = false;
                     while (!break_out) {
                         switch (lex(arena, lexer, &token3)) {
                             case TOKEN_NAME:
-                                (*next)->type = AST_PROPERTY_TYPE_FREE;
-                                (*next)->name
-                                    = string_duplicate(arena, token3.name);
-                                (*next)->object        = create_object(arena);
-                                (*next)->object->alias = AST_OBJECT_ALIAS_ANY;
-                                (*next)->next          = create_property(
-                                    arena, AST_PROPERTY_TYPE_FREE
+                                struct ast_property* next = add_property(
+                                    arena, object, AST_PROPERTY_TYPE_NON_FREE
                                 );
-                                next = &(*next)->next;
+                                next->type = AST_PROPERTY_TYPE_FREE;
+                                next->name
+                                    = string_duplicate(arena, token3.name);
+                                next->object = create_object(arena, object);
+                                next->object->type.type = AST_STYPE_ANY;
+
+                                struct ast_object_property_type* next_type
+                                    = add_type_object_type(arena, object);
+
+                                next_type->name
+                                    = string_duplicate(arena, token3.name);
+                                next_type->type->type     = AST_STYPE_ALIAS;
+                                next_type->type->alias_id = next->id;
+
                                 break;
                             case TOKEN_GREATER_THAN:
                                 break_out = true;
@@ -233,24 +346,31 @@ parse_object(struct arena* arena, struct lexer* lexer) {
                     break;
                 }
                 case TOKEN_GREATER_THAN: { // only one free property
-                    (*next)->type   = AST_PROPERTY_TYPE_FREE;
-                    (*next)->name   = string_duplicate(arena, token.name);
-                    (*next)->object = create_object(arena);
-                    (*next)->object->alias = AST_OBJECT_ALIAS_ANY;
-                    (*next)->next
-                        = create_property(arena, AST_PROPERTY_TYPE_NON_FREE);
-                    next = &(*next)->next;
+                    struct ast_property* next = add_property(
+                        arena, object, AST_PROPERTY_TYPE_NON_FREE
+                    );
+                    next->type   = AST_PROPERTY_TYPE_FREE;
+                    next->name   = string_duplicate(arena, token.name);
+                    next->object = create_object(arena, object);
+                    next->object->type.type = AST_STYPE_ANY;
+
+                    struct ast_object_property_type* next_type
+                        = add_type_object_type(arena, object);
+
+                    next_type->name       = string_duplicate(arena, token.name);
+                    next_type->type->type = AST_STYPE_ALIAS;
+                    next_type->type->alias_id = next->id;
                     break;
                 }
                 default: { // object copy
-                    object->alias = AST_OBJECT_ALIAS_OBJECT_COPY;
+                    object->type.type = AST_STYPE_COPY;
                     unlex(lexer, &token2);
-                    struct ast_object_copy* object_copy
-                        = arena_allocate(arena, sizeof(struct ast_object_copy));
-                    object->object_copy = object_copy;
-                    object_copy->name   = string_duplicate(arena, token.name);
-                    printf(STR_FMT "\n", STR_ARG(object_copy->name));
-                    parse_object_copies(arena, lexer, object_copy);
+                    add_object_copy(arena, object);
+                    object->object_copy->name
+                        = string_duplicate(arena, token.name);
+                    parse_object_copies(
+                        arena, lexer, object, object->object_copy, object
+                    );
                     break;
                 }
             }
@@ -260,18 +380,17 @@ parse_object(struct arena* arena, struct lexer* lexer) {
             unlex(lexer, &token);
             break;
     }
-    if (object->alias == AST_OBJECT_ALIAS_OBJECT_COPY) {
+    if (object->type.type == AST_STYPE_COPY) {
         return object;
     }
-    tt = lex(arena, lexer, &token);
-    switch (tt) {
+    switch (lex(arena, lexer, &token)) {
         case TOKEN_NAME:
-            object->alias = AST_OBJECT_ALIAS_OBJECT_COPY;
-            struct ast_object_copy* object_copy
-                = arena_allocate(arena, sizeof(struct ast_object_copy));
-            object->object_copy = object_copy;
-            object_copy->name   = string_duplicate(arena, token.name);
-            parse_object_copies(arena, lexer, object_copy);
+            object->type.type = AST_STYPE_COPY;
+            add_object_copy(arena, object);
+            object->object_copy->name = string_duplicate(arena, token.name);
+            parse_object_copies(
+                arena, lexer, object, object->object_copy, object
+            );
             break;
         case TOKEN_OPEN_BRACE: {
             struct token token2 = {};
@@ -279,41 +398,47 @@ parse_object(struct arena* arena, struct lexer* lexer) {
             while (!break_out) {
                 switch (lex(arena, lexer, &token2)) {
                     case TOKEN_CLOSE_BRACE:
-                        *next     = nullptr;
                         break_out = true;
                         break;
                     default:
                         unlex(lexer, &token2);
-                        *next         = parse_property(arena, lexer);
-                        (*next)->next = create_property(
-                            arena, AST_PROPERTY_TYPE_NON_FREE
-                        );
-                        next = &(*next)->next;
+                        struct ast_property* next
+                            = parse_property(arena, lexer, object);
+
+                        struct ast_object_property_type* next_type
+                            = add_type_object_type(arena, object);
+
+                        next_type->name = string_duplicate(arena, next->name);
+                        next_type->type->type     = AST_STYPE_ALIAS;
+                        next_type->type->alias_id = next->id;
                         break;
                 }
             }
             break;
         }
         case TOKEN_INTEGER:
-            object->alias   = AST_OBJECT_ALIAS_INTEGER;
-            object->integer = token.integer;
+            object->type.type       = AST_STYPE_OBJECT;
+            object->type.extra_type = AST_EXTRA_STYPE_INTEGER;
+            object->integer         = token.integer;
             break;
         case TOKEN_STRING:
-            object->alias  = AST_OBJECT_ALIAS_STRING;
-            object->string = string_duplicate(arena, token.string);
+            object->type.type       = AST_STYPE_OBJECT;
+            object->type.extra_type = AST_EXTRA_STYPE_STRING;
+            object->string          = string_duplicate(arena, token.string);
             break;
         default:
             unlex(lexer, &token);
             break;
     }
-    *next = nullptr;
 
     return object;
 }
 
 // property ::= identifier "=" object ";"
 static struct ast_property*
-parse_property(struct arena* arena, struct lexer* lexer) {
+parse_property(
+    struct arena* arena, struct lexer* lexer, struct ast_object* parent
+) {
     struct token token       = {};
     enum lex_token_type type = lex(arena, lexer, &token);
     if (type != TOKEN_NAME) {
@@ -321,12 +446,12 @@ parse_property(struct arena* arena, struct lexer* lexer) {
         return nullptr;
     }
     struct ast_property* property
-        = create_property(arena, AST_PROPERTY_TYPE_NON_FREE);
+        = add_property(arena, parent, AST_PROPERTY_TYPE_NON_FREE);
     property->name = string_duplicate(arena, token.name);
 
     expect_token(arena, lexer, TOKEN_ASSIGN, nullptr);
 
-    property->object = parse_object(arena, lexer);
+    property->object = parse_object(arena, lexer, parent);
 
     expect_token(arena, lexer, TOKEN_SEMICOLON, nullptr);
 
@@ -335,21 +460,20 @@ parse_property(struct arena* arena, struct lexer* lexer) {
 
 static struct ast_object*
 parse_root(struct arena* arena, struct lexer* lexer) {
-    struct ast_object* root = create_object(arena);
-    //     root->type       = OBJECT_TYPE_PROPERTIES;
-    root->properties = arena_allocate(arena, sizeof(struct ast_property));
-    struct ast_property** next_property = &root->properties;
+    struct ast_object* root = create_object(arena, nullptr);
 
     while (true) {
-        *next_property = parse_property(arena, lexer);
-        if (*next_property == nullptr) {
+        struct ast_property* property = parse_property(arena, lexer, root);
+        if (property == nullptr) {
             break;
         }
-        (*next_property)->next
-            = arena_allocate(arena, sizeof(struct ast_property));
-        next_property = &(*next_property)->next;
+        struct ast_object_property_type* type
+            = add_type_object_type(arena, root);
+        type->name           = string_duplicate(arena, property->name);
+        type->type->type     = AST_STYPE_ALIAS;
+        type->type->alias_id = property->id;
     }
-    *next_property = nullptr;
+
     return root;
 }
 
@@ -379,18 +503,25 @@ property_type_as_string(enum ast_property_type type) {
 }
 
 static void
-print_property(struct ast_property* property, usize indent) {
+print_property(struct ast_property* property, usize indent, bool print_free) {
     if (property == nullptr) {
         return;
     }
-    print_indent(indent);
-    fprintf(stdout, "Property: " STR_FMT "\n", STR_ARG(property->name));
-    print_indent(indent + 2);
-    fprintf(
-        stdout, STR_FMT "\n", STR_ARG(property_type_as_string(property->type))
-    );
-    print_object(property->object, indent + 2);
-    print_property(property->next, indent);
+    if ((print_free && property->type == AST_PROPERTY_TYPE_FREE)
+        || (!print_free && property->type == AST_PROPERTY_TYPE_NON_FREE)) {
+        print_indent(indent);
+        fprintf(
+            stdout, "Property %d: " STR_FMT "\n", property->id,
+            STR_ARG(property->name)
+        );
+        print_indent(indent + 2);
+        fprintf(
+            stdout, STR_FMT "\n",
+            STR_ARG(property_type_as_string(property->type))
+        );
+        print_object(property->object, indent + 2);
+    }
+    print_property(property->next, indent, print_free);
 }
 
 static void
@@ -418,58 +549,105 @@ print_object_copy(struct ast_object_copy* object_copy, usize indent) {
 }
 
 void
+print_type(struct ast_type* type, usize indent) {
+    switch (type->type) {
+        case AST_STYPE_ANY:
+            fprintf(stdout, "ANY");
+            break;
+        case AST_STYPE_COPY:
+            fprintf(stdout, "COPY");
+            break;
+        case AST_STYPE_OBJECT:
+            fprintf(stdout, "OBJECT {\n");
+            struct ast_object_property_type* object_type = type->object_types;
+            while (object_type != nullptr) {
+                print_indent(indent + 2);
+                fprintf(stdout, STR_FMT ": ", STR_ARG(object_type->name));
+                print_type(object_type->type, indent + 2);
+                fprintf(stdout, "\n");
+                object_type = object_type->next;
+            }
+            print_indent(indent);
+            fprintf(stdout, "}");
+            switch (type->extra_type) {
+                case AST_EXTRA_STYPE_INTEGER:
+                    fprintf(stdout, "\n");
+                    print_indent(indent);
+                    fprintf(stdout, "extra: INTEGER");
+                    break;
+                case AST_EXTRA_STYPE_STRING:
+                    fprintf(stdout, "\n");
+                    print_indent(indent);
+                    fprintf(stdout, "extra: STRING");
+                    break;
+                case AST_EXTRA_STYPE_NONE:
+                    break;
+            }
+            break;
+        case AST_STYPE_UNION:
+            fprintf(stdout, "UNION {\n");
+            struct ast_union_type* union_type = type->union_type;
+            while (union_type != nullptr) {
+                print_indent(indent + 2);
+                fprintf(stdout, "(");
+                print_type(union_type->type, indent + 2);
+                fprintf(stdout, "),\n");
+
+                union_type = union_type->next;
+            }
+            print_indent(indent);
+            fprintf(stdout, "}");
+            break;
+        case AST_STYPE_ALIAS:
+            fprintf(stdout, "ALIAS %d", type->alias_id);
+            break;
+    }
+}
+
+void
 print_object(struct ast_object* object, usize indent) {
     if (object == nullptr) {
         return;
     }
     print_indent(indent);
     fprintf(stdout, "Object %d", object->id);
-    // if (object->parent != nullptr) {
-    //     fprintf(stdout, ", parent %d", object->parent->id);
-    // }
+    if (object->parent != nullptr) {
+        fprintf(stdout, ", parent: %d", object->parent->id);
+    }
     fprintf(stdout, ":\n");
-    print_property(object->properties, indent + 2);
-    switch (object->alias) {
-        case AST_OBJECT_ALIAS_NONE:
+
+    print_indent(indent + 4);
+    fprintf(stdout, "type ");
+    print_type(&object->type, indent + 4);
+    fprintf(stdout, "\n");
+
+    print_property(object->properties, indent + 2, true);
+
+    switch (object->type.type) {
+        case AST_STYPE_ANY:
+        case AST_STYPE_ALIAS:
+        case AST_STYPE_UNION:
             break;
-        case AST_OBJECT_ALIAS_INTEGER:
-            print_indent(indent);
-            fprintf(stdout, "  alias: INTEGER\n");
-            print_indent(indent);
-            fprintf(stdout, "  value: %ld\n", object->integer);
-            break;
-        case AST_OBJECT_ALIAS_STRING:
-            print_indent(indent);
-            fprintf(stdout, "  alias: STRING\n");
-            print_indent(indent);
-            fprintf(stdout, "  value: " STR_FMT "\n", STR_ARG(object->string));
-            break;
-        case AST_OBJECT_ALIAS_ANY:
-            print_indent(indent);
-            fprintf(stdout, "  alias: ANY\n");
-            break;
-        case AST_OBJECT_ALIAS_OBJECT_COPY:
+        case AST_STYPE_COPY:
             print_object_copy(object->object_copy, indent + 2);
             break;
+        case AST_STYPE_OBJECT:
+            switch (object->type.extra_type) {
+                case AST_EXTRA_STYPE_INTEGER:
+                    print_indent(indent);
+                    fprintf(stdout, "  value: %ld\n", object->integer);
+                    break;
+                case AST_EXTRA_STYPE_STRING:
+                    print_indent(indent);
+                    fprintf(
+                        stdout, "  value: " STR_FMT "\n",
+                        STR_ARG(object->string)
+                    );
+                    break;
+                case AST_EXTRA_STYPE_NONE:
+                    break;
+            }
+            print_property(object->properties, indent + 2, false);
             break;
     }
-    // print_free_property(object->free_properties, indent + 2);
-    // switch (object->type) {
-    //     case OBJECT_TYPE_OBJECT_COPY:
-    //         print_object_copy(object->object_copy, indent + 2);
-    //         break;
-    //     case OBJECT_TYPE_PROPERTIES:
-    //         print_property(object->properties, indent + 2);
-    //         break;
-    //     case OBJECT_TYPE_INTEGER:
-    //         print_indent(indent);
-    //         fprintf(stdout, "  value: %ld\n", object->integer);
-    //         break;
-    //     case OBJECT_TYPE_STRING:
-    //         print_indent(indent);
-    //         fprintf(stdout, "  value: " STR_FMT "\n",
-    //         STR_ARG(object->string)); break;
-    //     case OBJECT_TYPE_NONE:
-    //         break;
-    // }
 }
