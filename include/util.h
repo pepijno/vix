@@ -29,3 +29,6 @@ struct location {
 struct arena;
 
 void error_line(struct arena* arena, struct location location);
+struct string generate_name(
+    struct arena* arena, u32 const id, struct string const format
+);

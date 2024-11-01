@@ -7,9 +7,9 @@ c = "bla";
 d = b(c);
 
 e = x y z > {
-	f = 3;
+	f = b(x);
 	g = c;
-	h = b(5);
+	h = a;
 };
 
-main = a(5, 7);
+main = e(5, 7).h(11, 13);

@@ -116,3 +116,14 @@ error_line(struct arena* arena, struct location location) {
 
     fclose(src);
 }
+
+struct string
+generate_name(struct arena* arena, u32 const id, struct string const format) {
+    i32 n        = snprintf(nullptr, 0, format.data, id);
+    char* buffer = arena_allocate(arena, n + 1);
+    snprintf(buffer, n + 1, format.data, id);
+    return (struct string){
+        .data   = buffer,
+        .length = n,
+    };
+}

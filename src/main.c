@@ -38,12 +38,12 @@ main(i32 argc, char* argv[]) {
 
     print_object(root, 0);
 
-    // struct qbe_program program = {};
-    // program.next               = &program.definitions;
-    //
-    // generate(&arena, &program, root, root_type);
-    //
-    // emit(&program, stdout);
+    struct qbe_program program = {};
+    program.next               = &program.definitions;
+
+    generate(&arena, &program, root);
+
+    emit(&program, stdout);
 
     return 0;
 }

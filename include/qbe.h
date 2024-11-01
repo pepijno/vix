@@ -17,7 +17,7 @@ enum qbe_stype {
 struct qbe_type;
 
 struct qbe_field {
-    struct qbe_type* type;
+    struct qbe_type const* type;
     usize count;
     struct qbe_field* next;
 };
@@ -28,7 +28,7 @@ struct qbe_type {
 
     struct string name;
     struct qbe_field fields;
-    struct type* base;
+    struct ast_type* base;
 };
 
 enum qbe_value_type {

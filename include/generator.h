@@ -21,9 +21,12 @@ struct generated_value {
 
 struct qbe_program;
 struct ast_object;
-struct function_type;
+struct ast_type;
+
+struct qbe_type* qtype_lookup(
+    struct arena* arena, struct qbe_program* program, struct ast_type* type
+);
 
 void generate(
-    struct arena* arena, struct qbe_program* program, struct ast_object* root,
-    struct function_type* root_type
+    struct arena* arena, struct qbe_program* program, struct ast_object* root
 );

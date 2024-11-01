@@ -30,12 +30,14 @@ enum ast_extra_stype {
 };
 
 struct ast_type {
+    u32 id;
     enum ast_stype type;
     enum ast_extra_stype extra_type;
+    u16 size;
     union {
         struct ast_object_property_type* object_types;
         struct ast_union_type* union_type;
-        u32 alias_id;
+        struct ast_type* alias_type;
     };
 };
 

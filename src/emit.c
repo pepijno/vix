@@ -1,5 +1,6 @@
 #include "emit.h"
 
+#include "ast.h"
 #include "qbe.h"
 
 #include <assert.h>
@@ -33,8 +34,14 @@ emit_qtype(struct qbe_type const* type, bool aggregate, FILE* out) {
 void
 qemit_type(struct qbe_definition* definition, FILE* out) {
     assert(definition->definition_type == QBE_DEFINITION_TYPE_TYPE);
-    struct qbe_type* type = &definition->type;
-    fprintf(out, "type :" STR_FMT " =", STR_ARG(definition->name));
+    auto type = &definition->type;
+    auto base = type->base;
+    if (base != nullptr) {
+        fprintf(out, "# [id: %d; size: %d]\n", base->id, base->size);
+        fprintf(out, "type :" STR_FMT " =", STR_ARG(definition->name));
+    } else {
+        fprintf(out, "type :" STR_FMT " =", STR_ARG(definition->name));
+    }
     fprintf(out, " {");
 
     struct qbe_field* field = &definition->type.fields;

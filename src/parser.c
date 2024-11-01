@@ -48,6 +48,7 @@ create_object(struct arena* arena, struct ast_object* parent) {
     new_object->object_copy = nullptr;
     new_object->parent      = parent;
     new_object->id          = id;
+    new_object->type.id     = id;
     id += 1;
     buckets_insert_object(arena, new_object);
     return new_object;
@@ -307,7 +308,7 @@ parse_object(
 
                     next_type->name       = string_duplicate(arena, token.name);
                     next_type->type->type = AST_STYPE_ALIAS;
-                    next_type->type->alias_id = next->id;
+                    next_type->type->alias_type = &next->object->type;
 
                     struct token token3 = {};
                     bool break_out      = false;
@@ -328,8 +329,9 @@ parse_object(
 
                                 next_type->name
                                     = string_duplicate(arena, token3.name);
-                                next_type->type->type     = AST_STYPE_ALIAS;
-                                next_type->type->alias_id = next->id;
+                                next_type->type->type = AST_STYPE_ALIAS;
+                                next_type->type->alias_type
+                                    = &next->object->type;
 
                                 break;
                             case TOKEN_GREATER_THAN:
@@ -359,7 +361,7 @@ parse_object(
 
                     next_type->name       = string_duplicate(arena, token.name);
                     next_type->type->type = AST_STYPE_ALIAS;
-                    next_type->type->alias_id = next->id;
+                    next_type->type->alias_type = &next->object->type;
                     break;
                 }
                 default: { // object copy
@@ -409,8 +411,8 @@ parse_object(
                             = add_type_object_type(arena, object);
 
                         next_type->name = string_duplicate(arena, next->name);
-                        next_type->type->type     = AST_STYPE_ALIAS;
-                        next_type->type->alias_id = next->id;
+                        next_type->type->type       = AST_STYPE_ALIAS;
+                        next_type->type->alias_type = &next->object->type;
                         break;
                 }
             }
@@ -469,9 +471,9 @@ parse_root(struct arena* arena, struct lexer* lexer) {
         }
         struct ast_object_property_type* type
             = add_type_object_type(arena, root);
-        type->name           = string_duplicate(arena, property->name);
-        type->type->type     = AST_STYPE_ALIAS;
-        type->type->alias_id = property->id;
+        type->name             = string_duplicate(arena, property->name);
+        type->type->type       = AST_STYPE_ALIAS;
+        type->type->alias_type = &property->object->type;
     }
 
     return root;
@@ -599,9 +601,12 @@ print_type(struct ast_type* type, usize indent) {
             fprintf(stdout, "}");
             break;
         case AST_STYPE_ALIAS:
-            fprintf(stdout, "ALIAS %d", type->alias_id);
+            fprintf(stdout, "ALIAS %d", type->alias_type->id);
             break;
     }
+    fprintf(stdout, "\n");
+    print_indent(indent);
+    fprintf(stdout, "size: %d", type->size);
 }
 
 void
