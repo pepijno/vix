@@ -1,6 +1,7 @@
 #pragma once
 
 #include "defs.h"
+#include "str.h"
 #include "utf8.h"
 #include "util.h"
 

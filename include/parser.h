@@ -1,28 +1,17 @@
 #pragma once
 
-#include "defs.h"
-
-#define BUCKET_SIZE 4096
+#include "hashmap.h"
 
 struct arena;
 struct lexer;
+struct _ast_element;
 
-enum parser_entry_type {
-    PARSER_ENTRY_TYPE_OBJECT,
-    PARSER_ENTRY_TYPE_PROPERTY,
+HASHMAP_DEFS(usize, struct _ast_property*, properties)
+
+struct parser_context {
+    struct arena* arena;
+    usize next_id;
+    struct hashmap_properties properties;
 };
 
-struct parser_entry {
-    enum parser_entry_type type;
-    union {
-        struct ast_object* object;
-        struct ast_property* property;
-    };
-    struct parser_entry* next;
-};
-
-extern struct parser_entry* buckets[BUCKET_SIZE];
-struct parser_entry* buckets_lookup(u32 const id);
-
-struct ast_object* parse(struct arena* arena, struct lexer* lexer);
-void print_object(struct ast_object* object, usize indent);
+struct _ast_element* _parse(struct parser_context* parser_context, struct lexer* lexer);

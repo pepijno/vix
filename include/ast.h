@@ -1,81 +1,49 @@
 #pragma once
 
 #include "defs.h"
+#include "str.h"
+#include "types.h"
+#include "vector.h"
 
-struct ast_type;
+struct _ast_element;
 
-struct ast_object_property_type {
+struct _ast_id {
+    struct string id;
+};
+
+struct _ast_integer {
+    u64 value;
+};
+
+struct _ast_string {
+    struct string value;
+};
+
+struct type;
+
+struct _ast_property {
+    usize id;
     struct string name;
-    struct ast_type* type;
-    struct ast_object_property_type* next;
+    struct type* type;
+    struct _ast_element* value;
 };
 
-struct ast_union_type {
-    struct ast_type* type;
-    struct ast_union_type* next;
+VECTOR_DEFS(struct _ast_property*, ast_property_ptr)
+
+enum _ast_element_type {
+    AST_ELEMENT_TYPE_INTEGER,
+    AST_ELEMENT_TYPE_STRING,
+    AST_ELEMENT_TYPE_ID,
+    AST_ELEMENT_TYPE_PROPERTIES,
 };
 
-enum ast_stype {
-    AST_STYPE_ANY,
-    AST_STYPE_COPY,
-    AST_STYPE_OBJECT,
-    AST_STYPE_UNION,
-    AST_STYPE_ALIAS,
-};
-
-enum ast_extra_stype {
-    AST_EXTRA_STYPE_NONE,
-    AST_EXTRA_STYPE_INTEGER,
-    AST_EXTRA_STYPE_STRING,
-};
-
-struct ast_type {
-    u32 id;
-    enum ast_stype type;
-    enum ast_extra_stype extra_type;
-    u16 size;
+struct _ast_element {
+    enum _ast_element_type type;
+    struct type_env* env;
     union {
-        struct ast_object_property_type* object_types;
-        struct ast_union_type* union_type;
-        struct ast_type* alias_type;
+        struct _ast_id id;
+        struct _ast_integer integer;
+        struct _ast_string string;
+        struct vector_ast_property_ptr properties;
     };
-};
-
-struct ast_property;
-struct ast_object_copy;
-
-struct ast_object {
-    u32 id;
-    struct ast_object* parent;
-    struct ast_type type;
-    struct ast_property* properties;
-    union {
-        struct ast_object_copy* object_copy;
-        u64 integer;
-        struct string string;
-    };
-};
-
-struct ast_free_property_assign {
-    struct ast_object* value;
-    struct ast_free_property_assign* next;
-};
-
-struct ast_object_copy {
-    struct string name;
-    struct ast_free_property_assign* free_properties;
-    struct ast_object_copy* next;
-};
-
-enum ast_property_type {
-    AST_PROPERTY_TYPE_FREE,
-    AST_PROPERTY_TYPE_NON_FREE,
-};
-
-struct ast_property {
-    u32 id;
-    enum ast_property_type type;
-    struct string name;
-    struct ast_object* object;
-    struct ast_property* next;
 };

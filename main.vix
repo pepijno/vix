@@ -1,15 +1,12 @@
-a = x y > c;
-
-b = y > 3;
-
-c = "bla";
-
-d = b(c);
-
-e = x y z > {
-	f = b(x);
-	g = c;
-	h = a;
+a = {
+	x = c;
+	y = b;
+	z = {
+		xx = x;
+		yy = xx;
+	};
 };
 
-main = e(5, 7).h(11, 13);
+b = 3;
+
+c = "bla";

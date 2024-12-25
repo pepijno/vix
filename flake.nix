@@ -2,7 +2,7 @@
   description = "vix";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-unstable";
+    nixpkgs.url = "nixpkgs/nixos-24.11";
     utils.url = github:numtide/flake-utils;
   };
 
@@ -14,13 +14,15 @@
         buildInputs = with pkgs; [
           gnumake
           clang-tools
-          gdb
           valgrind
           nasm
           asm-lsp
           asmfmt
           qbe
           bear
+          gdb
+          glibc
+          glibc.static
         ];
       in
       rec {

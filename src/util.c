@@ -1,6 +1,7 @@
 #include "util.h"
 
 #include "allocator.h"
+#include "str.h"
 
 #include <stdarg.h>
 #define _GNU_SOURCE

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "defs.h"
+#include "str.h"
 
 enum error_color {
     ERROR_COLOR_AUTO,
