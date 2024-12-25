@@ -56,7 +56,7 @@ struct compilation_env;
 struct _ast_element;
 
 void compile(
-    struct arena* arena, struct compilation_env compilation_env,
+    struct allocator* allocator, struct compilation_env compilation_env,
     struct _ast_element element, struct vector_instruction* instructions
 );
 void _emit(struct vector_instruction instructions);

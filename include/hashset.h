@@ -16,7 +16,7 @@
     };                                                 \
                                                        \
     struct HASHSET_NAME(__name) {                      \
-        struct arena* arena;                           \
+        struct allocator* allocator;                   \
         struct vector_sizes indices;                   \
         usize capacity;                                \
         usize length;                                  \
@@ -25,7 +25,7 @@
 
 #define HASHSET_NEW_DEF(__name) \
     struct HASHSET_NAME(__name) \
-        CONCAT(HASHSET_NAME(__name), _new)(struct arena * arena);
+        CONCAT(HASHSET_NAME(__name), _new)(struct allocator * allocator);
 
 #define HASHSET_ADD_DEF(__type, __name)                      \
     void CONCAT(HASHSET_NAME(__name), _add)(                 \
@@ -48,20 +48,21 @@
     HASHSET_CONTAINS_DEF(__type, __name) \
     HASHSET_COPY_DEF(__type, __name)
 
-#define HASHSET_NEW_IMPL(__type, __name)                                     \
-    struct HASHSET_NAME(__name)                                              \
-        CONCAT(HASHSET_NAME(__name), _new)(struct arena * arena) {           \
-        usize capacity                      = 32;                            \
-        struct HASHSET_NAME(__name) hashset = {                              \
-            .capacity = capacity,                                            \
-            .arena    = arena,                                               \
-            .length   = 0,                                                   \
-            .indices  = vector_sizes_new(arena),                             \
-        };                                                                   \
-        hashset.data = arena_allocate(                                       \
-            arena, sizeof(struct HASHSET_VALUE_HASH_PAIR(__name)) * capacity \
-        );                                                                   \
-        return hashset;                                                      \
+#define HASHSET_NEW_IMPL(__type, __name)                                   \
+    struct HASHSET_NAME(__name)                                            \
+        CONCAT(HASHSET_NAME(__name), _new)(struct allocator * allocator) { \
+        usize capacity                      = 32;                          \
+        struct HASHSET_NAME(__name) hashset = {                            \
+            .capacity  = capacity,                                         \
+            .allocator = allocator,                                        \
+            .length    = 0,                                                \
+            .indices   = vector_sizes_new(allocator),                      \
+        };                                                                 \
+        hashset.data = allocator_allocate(                                 \
+            allocator,                                                     \
+            sizeof(struct HASHSET_VALUE_HASH_PAIR(__name)) * capacity      \
+        );                                                                 \
+        return hashset;                                                    \
     }
 
 #define HASHSET_ADD_IMPL(__type, __name, __hash_fn, __is_equals_fn)          \
@@ -101,7 +102,7 @@
             auto new_size = sizeof(struct HASHSET_VALUE_HASH_PAIR(__name))   \
                           * (__name)->capacity * 2;                          \
             struct HASHSET_VALUE_HASH_PAIR(__name)* new_data                 \
-                = arena_allocate((__name)->arena, new_size);                 \
+                = allocator_allocate((__name)->allocator, new_size);         \
             vector_sizes_clear(&(__name)->indices);                          \
             auto old_capacity = (__name)->capacity;                          \
             (__name)->capacity *= 2;                                         \
@@ -168,8 +169,8 @@
         CONCAT(HASHSET_NAME(__name), _copy)(struct HASHSET_NAME(__name) __name                       \
         ) {                                                                                          \
         struct HASHSET_NAME(__name) new_set = (__name);                                              \
-        new_set.data                        = arena_allocate(                                        \
-            new_set.arena,                                                    \
+        new_set.data                        = allocator_allocate(                                    \
+            new_set.allocator,                                                \
             sizeof(struct HASHSET_VALUE_HASH_PAIR(__name)) * new_set.capacity \
         );                                                                    \
         memcpy(                                                                                      \

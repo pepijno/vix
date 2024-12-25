@@ -11,54 +11,54 @@
 #define KV_PAIR_NAME(__name)      CONCAT(kv_pair_, __name)
 #define KV_PAIR_HASH_NAME(__name) CONCAT(kv_pair_hash_, __name)
 
-#define HASHMAP_DEFS(__key_type, __value_type, __name)            \
-    struct KV_PAIR_NAME(__name) {                                 \
-        __key_type key;                                           \
-        __value_type value;                                       \
-    };                                                            \
-    struct KV_PAIR_HASH_NAME(__name) {                            \
-        struct KV_PAIR_NAME(__name) pair;                         \
-        u32 hash;                                                 \
-    };                                                            \
-                                                                  \
-    struct HASHMAP_NAME(__name) {                                 \
-        struct arena* arena;                                      \
-        struct vector_sizes indices;                              \
-        usize capacity;                                           \
-        usize length;                                             \
-        struct KV_PAIR_HASH_NAME(__name) * data;                  \
-    };                                                            \
-                                                                  \
-    struct HASHMAP_NAME(__name)                                   \
-        CONCAT(HASHMAP_NAME(__name), _new)(struct arena * arena); \
-                                                                  \
-    __value_type CONCAT(HASHMAP_NAME(__name), _add)(              \
-        struct HASHMAP_NAME(__name) * __name, __key_type key,     \
-        __value_type value                                        \
-    );                                                            \
-                                                                  \
-    __value_type CONCAT(HASHMAP_NAME(__name), _find)(             \
-        struct HASHMAP_NAME(__name) * __name, __key_type key      \
-    );                                                            \
-                                                                  \
-    bool CONCAT(HASHMAP_NAME(__name), _contains)(                 \
-        struct HASHMAP_NAME(__name) __name, __key_type key        \
+#define HASHMAP_DEFS(__key_type, __value_type, __name)                    \
+    struct KV_PAIR_NAME(__name) {                                         \
+        __key_type key;                                                   \
+        __value_type value;                                               \
+    };                                                                    \
+    struct KV_PAIR_HASH_NAME(__name) {                                    \
+        struct KV_PAIR_NAME(__name) pair;                                 \
+        u32 hash;                                                         \
+    };                                                                    \
+                                                                          \
+    struct HASHMAP_NAME(__name) {                                         \
+        struct allocator* allocator;                                      \
+        struct vector_sizes indices;                                      \
+        usize capacity;                                                   \
+        usize length;                                                     \
+        struct KV_PAIR_HASH_NAME(__name) * data;                          \
+    };                                                                    \
+                                                                          \
+    struct HASHMAP_NAME(__name)                                           \
+        CONCAT(HASHMAP_NAME(__name), _new)(struct allocator * allocator); \
+                                                                          \
+    __value_type CONCAT(HASHMAP_NAME(__name), _add)(                      \
+        struct HASHMAP_NAME(__name) * __name, __key_type key,             \
+        __value_type value                                                \
+    );                                                                    \
+                                                                          \
+    __value_type CONCAT(HASHMAP_NAME(__name), _find)(                     \
+        struct HASHMAP_NAME(__name) * __name, __key_type key              \
+    );                                                                    \
+                                                                          \
+    bool CONCAT(HASHMAP_NAME(__name), _contains)(                         \
+        struct HASHMAP_NAME(__name) __name, __key_type key                \
     );
 
 #define HASHMAP_IMPL(                                                        \
     __key_type, __value_type, __name, __hash_fn, __is_equals_fn              \
 )                                                                            \
     struct HASHMAP_NAME(__name)                                              \
-        CONCAT(HASHMAP_NAME(__name), _new)(struct arena * arena) {           \
+        CONCAT(HASHMAP_NAME(__name), _new)(struct allocator * allocator) {   \
         usize capacity                      = 32;                            \
         struct HASHMAP_NAME(__name) hashmap = {                              \
-            .capacity = capacity,                                            \
-            .arena    = arena,                                               \
-            .length   = 0,                                                   \
-            .indices  = vector_sizes_new(arena),                             \
+            .capacity  = capacity,                                           \
+            .allocator = allocator,                                          \
+            .length    = 0,                                                  \
+            .indices   = vector_sizes_new(allocator),                        \
         };                                                                   \
-        hashmap.data = arena_allocate(                                       \
-            arena, sizeof(struct KV_PAIR_NAME(__name)) * capacity            \
+        hashmap.data = allocator_allocate(                                   \
+            allocator, sizeof(struct KV_PAIR_NAME(__name)) * capacity        \
         );                                                                   \
         return hashmap;                                                      \
     }                                                                        \
@@ -100,7 +100,7 @@
             auto new_size = sizeof(struct KV_PAIR_HASH_NAME(__name))         \
                           * (__name)->capacity * 2;                          \
             struct KV_PAIR_HASH_NAME(__name)* new_data                       \
-                = arena_allocate((__name)->arena, new_size);                 \
+                = allocator_allocate((__name)->allocator, new_size);         \
             vector_sizes_clear(&(__name)->indices);                          \
             auto old_capacity = (__name)->capacity;                          \
             (__name)->capacity *= 2;                                         \

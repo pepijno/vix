@@ -1,4 +1,5 @@
 #include "allocator.h"
+#include "arena.h"
 #include "ast.h"
 #include "compilation_env.h"
 #include "defs.h"
@@ -37,39 +38,40 @@ main(i32 argc, char* argv[]) {
         exit(1);
     }
 
-    usize arena_buffer_size = 1024 * 1024 * 128;
-    u8* arena_buffer        = malloc(arena_buffer_size);
-    struct arena arena      = arena_init(arena_buffer, arena_buffer_size);
+    usize arena_buffer_size    = 1024 * 1024 * 128;
+    u8* arena_buffer           = malloc(arena_buffer_size);
+    struct arena arena         = arena_init(arena_buffer, arena_buffer_size);
+    struct allocator allocator = arena_allocator_init(&arena);
 
     FILE* f            = fopen(argv[1], "rb");
-    struct lexer lexer = lexer_new(&arena, f, 0);
-    sources            = arena_allocate(&arena, 2 * sizeof(struct string*));
-    sources[0]         = from_cstr(argv[1]);
+    struct lexer lexer = lexer_new(&allocator, f, 0);
+    sources    = allocator_allocate(&allocator, 2 * sizeof(struct string*));
+    sources[0] = from_cstr(argv[1]);
 
     struct parser_context parser_context = {
-        .arena      = &arena,
+        .allocator  = &allocator,
         .next_id    = 1,
-        .properties = hashmap_properties_new(&arena),
+        .properties = hashmap_properties_new(&allocator),
     };
 
     struct _ast_element* root = _parse(&parser_context, &lexer);
     print_element(root, 0);
 
     struct object_graph obj_graph = {
-        .edges           = hashset_edge_new(&arena),
-        .adjacency_lists = hashmap_adjacency_new(&arena),
+        .edges           = hashset_edge_new(&allocator),
+        .adjacency_lists = hashmap_adjacency_new(&allocator),
     };
 
     struct typecheck_env typecheck_env = {
         .parent = nullptr,
-        .names  = hashmap_string_id_new(&arena),
+        .names  = hashmap_string_id_new(&allocator),
     };
 
     typecheck_init_properties(
-        &arena, &obj_graph, root->properties, &typecheck_env
+        &allocator, &obj_graph, root->properties, &typecheck_env
     );
 
-    auto groups = graph_compute_order(&arena, &obj_graph);
+    auto groups = graph_compute_order(&allocator, &obj_graph);
 
     vector_foreach(groups, group) {
         hashset_foreach(group->members, member) {
@@ -81,13 +83,13 @@ main(i32 argc, char* argv[]) {
     }
 
     struct type_context context = {
-        .last_id = 1,
-        .arena   = &arena,
-        .types   = hashmap_string_type_new(&arena),
+        .last_id   = 1,
+        .allocator = &allocator,
+        .types     = hashmap_string_type_new(&allocator),
     };
     struct type_env env = {
-        .arena = &arena,
-        .names = hashmap_string_type_new(&arena),
+        .allocator = &allocator,
+        .names     = hashmap_string_type_new(&allocator),
     };
 
     vector_foreach(groups, group) {
@@ -119,8 +121,8 @@ main(i32 argc, char* argv[]) {
         }),
     };
     vector_foreach(root->properties, prop) {
-        auto instructions = vector_instruction_new(&arena);
-        compile(&arena, compilation_env, *prop->value, &instructions);
+        auto instructions = vector_instruction_new(&allocator);
+        compile(&allocator, compilation_env, *prop->value, &instructions);
         vector_foreach(instructions, instruction) {
             print_instruction(instruction, 0);
         }

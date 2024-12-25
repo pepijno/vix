@@ -11,7 +11,7 @@
 VECTOR_IMPL(struct _ast_property*, ast_property_ptr)
 
 static noreturn void
-vsynerror(struct arena* arena, struct token* token, va_list ap) {
+vsynerror(struct allocator* allocator, struct token* token, va_list ap) {
     enum lex_token_type type = va_arg(ap, enum lex_token_type);
 
     fprintf(
@@ -32,37 +32,39 @@ vsynerror(struct arena* arena, struct token* token, va_list ap) {
     }
 
     fprintf(stderr, "found '" STR_FMT "'\n", STR_ARG(token_names[token->type]));
-    error_line(arena, token->location);
+    error_line(allocator, token->location);
     exit(EXIT_PARSE);
 }
 
 static noreturn void
-synerror(struct arena* arena, struct token* token, ...) {
+synerror(struct allocator* allocator, struct token* token, ...) {
     va_list ap;
     va_start(ap, token);
-    vsynerror(arena, token, ap);
+    vsynerror(allocator, token, ap);
     va_end(ap);
 }
 
 static void
-synassert(struct arena* arena, bool condition, struct token* token, ...) {
+synassert(
+    struct allocator* allocator, bool condition, struct token* token, ...
+) {
     if (!condition) {
         va_list ap;
         va_start(ap, token);
-        vsynerror(arena, token, ap);
+        vsynerror(allocator, token, ap);
         va_end(ap);
     }
 }
 
 static void
 expect_token(
-    struct arena* arena, struct lexer* lexer, enum lex_token_type token_type,
-    struct token* token
+    struct allocator* allocator, struct lexer* lexer,
+    enum lex_token_type token_type, struct token* token
 ) {
     struct token _token = {};
     struct token* out   = token != nullptr ? token : &_token;
-    lex(arena, lexer, out);
-    synassert(arena, out->type == token_type, out, token_type, TOKEN_EOF);
+    lex(allocator, lexer, out);
+    synassert(allocator, out->type == token_type, out, token_type, TOKEN_EOF);
     if (token == nullptr) {
         token_finish(out);
     }
@@ -74,24 +76,25 @@ static struct _ast_property* parse_property(
 
 static struct _ast_element*
 parse_element(struct parser_context* parser_context, struct lexer* lexer) {
-    struct token token = {};
-    struct _ast_element* element
-        = arena_allocate(parser_context->arena, sizeof(struct _ast_element));
+    struct token token           = {};
+    struct _ast_element* element = allocator_allocate(
+        parser_context->allocator, sizeof(struct _ast_element)
+    );
 
-    switch (lex(parser_context->arena, lexer, &token)) {
+    switch (lex(parser_context->allocator, lexer, &token)) {
         case TOKEN_NAME:
             element->type = AST_ELEMENT_TYPE_ID;
             element->id.id
-                = string_duplicate(parser_context->arena, token.name);
+                = string_duplicate(parser_context->allocator, token.name);
             break;
         case TOKEN_OPEN_BRACE:
             struct token token2 = {};
             bool break_out      = false;
             element->type       = AST_ELEMENT_TYPE_PROPERTIES;
             element->properties
-                = vector_ast_property_ptr_new(parser_context->arena);
+                = vector_ast_property_ptr_new(parser_context->allocator);
             while (!break_out) {
-                switch (lex(parser_context->arena, lexer, &token2)) {
+                switch (lex(parser_context->allocator, lexer, &token2)) {
                     case TOKEN_CLOSE_BRACE:
                         break_out = true;
                         break;
@@ -111,7 +114,7 @@ parse_element(struct parser_context* parser_context, struct lexer* lexer) {
         case TOKEN_STRING:
             element->type = AST_ELEMENT_TYPE_STRING;
             element->string.value
-                = string_duplicate(parser_context->arena, token.string);
+                = string_duplicate(parser_context->allocator, token.string);
             break;
         default:
             unlex(lexer, &token);
@@ -124,19 +127,20 @@ parse_element(struct parser_context* parser_context, struct lexer* lexer) {
 static struct _ast_property*
 parse_property(struct parser_context* parser_context, struct lexer* lexer) {
     struct token token       = {};
-    enum lex_token_type type = lex(parser_context->arena, lexer, &token);
+    enum lex_token_type type = lex(parser_context->allocator, lexer, &token);
     if (type != TOKEN_NAME) {
         unlex(lexer, &token);
         return nullptr;
     }
-    struct _ast_property* property
-        = arena_allocate(parser_context->arena, sizeof(struct _ast_property));
+    struct _ast_property* property = allocator_allocate(
+        parser_context->allocator, sizeof(struct _ast_property)
+    );
     property->id = parser_context->next_id;
     parser_context->next_id += 1;
-    property->name = string_duplicate(parser_context->arena, token.name);
-    expect_token(parser_context->arena, lexer, TOKEN_ASSIGN, nullptr);
+    property->name = string_duplicate(parser_context->allocator, token.name);
+    expect_token(parser_context->allocator, lexer, TOKEN_ASSIGN, nullptr);
     property->value = parse_element(parser_context, lexer);
-    expect_token(parser_context->arena, lexer, TOKEN_SEMICOLON, nullptr);
+    expect_token(parser_context->allocator, lexer, TOKEN_SEMICOLON, nullptr);
 
     hashmap_properties_add(&parser_context->properties, property->id, property);
 
@@ -145,10 +149,11 @@ parse_property(struct parser_context* parser_context, struct lexer* lexer) {
 
 static struct _ast_element*
 parse_root(struct parser_context* parser_context, struct lexer* lexer) {
-    struct _ast_element* root
-        = arena_allocate(parser_context->arena, sizeof(struct _ast_element));
+    struct _ast_element* root = allocator_allocate(
+        parser_context->allocator, sizeof(struct _ast_element)
+    );
     root->type       = AST_ELEMENT_TYPE_PROPERTIES;
-    root->properties = vector_ast_property_ptr_new(parser_context->arena);
+    root->properties = vector_ast_property_ptr_new(parser_context->allocator);
 
     for (;;) {
         struct _ast_property* property = parse_property(parser_context, lexer);
@@ -164,6 +169,6 @@ parse_root(struct parser_context* parser_context, struct lexer* lexer) {
 struct _ast_element*
 _parse(struct parser_context* parser_context, struct lexer* lexer) {
     struct _ast_element* root = parse_root(parser_context, lexer);
-    expect_token(parser_context->arena, lexer, TOKEN_EOF, nullptr);
+    expect_token(parser_context->allocator, lexer, TOKEN_EOF, nullptr);
     return root;
 }

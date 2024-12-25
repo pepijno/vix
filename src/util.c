@@ -31,7 +31,7 @@ vix_unreachable(void) {
 }
 
 static i32
-getline(struct arena* arena, char** lineptr, i32* n, FILE* stream) {
+getline(struct allocator* allocator, char** lineptr, i32* n, FILE* stream) {
     char* bufptr = NULL;
     char* p      = bufptr;
 
@@ -52,7 +52,7 @@ getline(struct arena* arena, char** lineptr, i32* n, FILE* stream) {
         return -1;
     }
     if (bufptr == NULL) {
-        bufptr = arena_allocate(arena, 128);
+        bufptr = allocator_allocate(allocator, 128);
         if (bufptr == NULL) {
             return -1;
         }
@@ -61,7 +61,7 @@ getline(struct arena* arena, char** lineptr, i32* n, FILE* stream) {
     p = bufptr;
     while (c != EOF) {
         if ((p - bufptr) > (size - 1)) {
-            bufptr = arena_resize(arena, bufptr, size, size + 128);
+            bufptr = allocator_resize(allocator, bufptr, size, size + 128);
             size   = size + 128;
             if (bufptr == NULL) {
                 return -1;
@@ -82,7 +82,7 @@ getline(struct arena* arena, char** lineptr, i32* n, FILE* stream) {
 }
 
 void
-error_line(struct arena* arena, struct location location) {
+error_line(struct allocator* allocator, struct location location) {
     struct string path = sources[location.file];
     struct stat filestat;
     if (stat(path.data, &filestat) == -1 || !S_ISREG(filestat.st_mode)) {
@@ -98,7 +98,7 @@ error_line(struct arena* arena, struct location location) {
     i32 length = 0;
     i32 n      = 0;
     while (n < location.line_number) {
-        if ((length = getline(arena, &line, &size, src)) == -1) {
+        if ((length = getline(allocator, &line, &size, src)) == -1) {
             fclose(src);
             return;
         }
@@ -119,9 +119,11 @@ error_line(struct arena* arena, struct location location) {
 }
 
 struct string
-generate_name(struct arena* arena, u32 const id, struct string const format) {
+generate_name(
+    struct allocator* allocator, u32 const id, struct string const format
+) {
     i32 n        = snprintf(nullptr, 0, format.data, id);
-    char* buffer = arena_allocate(arena, n + 1);
+    char* buffer = allocator_allocate(allocator, n + 1);
     snprintf(buffer, n + 1, format.data, id);
     return (struct string){
         .data   = buffer,

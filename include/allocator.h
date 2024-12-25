@@ -4,16 +4,18 @@
 
 #define DEFAULT_ALIGNMENT (2 * sizeof(void*))
 
-struct arena {
-    u8* buffer;
-    usize buffer_length;
-    usize previous_offset;
-    usize current_offset;
+struct allocator {
+    void* (*allocate)(void* context, usize size);
+    void* (*resize)(
+        void* context, void* old_memory, usize old_size, usize new_size
+    );
+    void (*free)(void* context, void* memory, usize size);
+    void* context;
 };
 
-struct arena arena_init(void* backing_buffer, usize backing_buffer_length);
-void* arena_allocate(struct arena* arena, usize size);
-void* arena_resize(
-    struct arena* arena, void* old_memory, usize old_size, usize new_size
+void* allocator_allocate(struct allocator* allocator, usize size);
+void* allocator_resize(
+    struct allocator* allocator, void* old_memory, usize old_size,
+    usize new_size
 );
-void arena_free_all(struct arena* arena);
+void allocator_free(struct allocator* allocator, void* memory, usize size);

@@ -51,12 +51,12 @@ struct lexer {
     struct location location;
 };
 
-struct arena;
+struct allocator;
 
-struct lexer lexer_new(struct arena* arena, FILE* f, i32 file_id);
+struct lexer lexer_new(struct allocator* allocator, FILE* f, i32 file_id);
 void lexer_finish(struct lexer* lexer);
 enum lex_token_type lex(
-    struct arena* arena, struct lexer* lexer, struct token* out
+    struct allocator* allocator, struct lexer* lexer, struct token* out
 );
 void unlex(struct lexer* lexer, struct token* out);
 void token_finish(struct token* token);

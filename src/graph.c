@@ -77,7 +77,7 @@ HASHMAP_IMPL(usize, struct group_data*, group_data, usize_hash, usize_equals)
 
 static void
 graph_create_groups(
-    struct arena* arena, struct object_graph obj_graph,
+    struct allocator* allocator, struct object_graph obj_graph,
     struct hashset_edge transitive_edges, struct hashmap_group_ids* group_ids,
     struct hashmap_group_data* group_data_map
 ) {
@@ -89,9 +89,9 @@ graph_create_groups(
         }
 
         struct group_data* new_group
-            = arena_allocate(arena, sizeof(struct group_data));
-        new_group->functions      = hashset_sizes_new(arena);
-        new_group->adjacency_list = hashset_sizes_new(arena);
+            = allocator_allocate(allocator, sizeof(struct group_data));
+        new_group->functions      = hashset_sizes_new(allocator);
+        new_group->adjacency_list = hashset_sizes_new(allocator);
         hashset_sizes_add(&new_group->functions, vertex.key);
         hashmap_group_data_add(group_data_map, id_counter, new_group);
         hashmap_group_ids_add(group_ids, vertex.key, id_counter);
@@ -130,11 +130,11 @@ HASHSET_IMPL(struct pair, pair, pair_hash, pair_equals)
 
 static void
 graph_create_edges(
-    struct arena* arena, struct object_graph* obj_graph,
+    struct allocator* allocator, struct object_graph* obj_graph,
     struct hashmap_group_ids* group_ids,
     struct hashmap_group_data* group_data_map
 ) {
-    struct hashset_pair group_edges = hashset_pair_new(arena);
+    struct hashset_pair group_edges = hashset_pair_new(allocator);
 
     hashmap_foreach(obj_graph->adjacency_lists, vertex) {
         auto vertex_id   = hashmap_group_ids_find(group_ids, vertex.key);
@@ -161,10 +161,10 @@ graph_create_edges(
 
 static struct vector_group_ptr
 graph_generate_order(
-    struct arena* arena, struct hashmap_group_data* group_data_map
+    struct allocator* allocator, struct hashmap_group_data* group_data_map
 ) {
-    struct queue_sizes id_queue    = queue_sizes_new(arena);
-    struct vector_group_ptr output = vector_group_ptr_new(arena);
+    struct queue_sizes id_queue    = queue_sizes_new(allocator);
+    struct vector_group_ptr output = vector_group_ptr_new(allocator);
 
     hashmap_foreach(*group_data_map, group) {
         if (group.value->indegree == 0) {
@@ -176,7 +176,7 @@ graph_generate_order(
         auto new_id     = queue_sizes_pop(&id_queue);
         auto group_data = hashmap_group_data_find(group_data_map, new_id);
         struct group* output_group
-            = arena_allocate(arena, sizeof(struct group));
+            = allocator_allocate(allocator, sizeof(struct group));
         output_group->members = hashset_sizes_copy(group_data->functions);
 
         hashset_foreach(group_data->adjacency_list, adjacenct_group) {
@@ -195,27 +195,32 @@ graph_generate_order(
 }
 
 struct vector_group_ptr
-graph_compute_order(struct arena* arena, struct object_graph* obj_graph) {
+graph_compute_order(
+    struct allocator* allocator, struct object_graph* obj_graph
+) {
     struct hashset_edge transitive_edges
         = graph_compute_transitive_edges(*obj_graph);
-    struct hashmap_group_ids group_ids       = hashmap_group_ids_new(arena);
-    struct hashmap_group_data group_data_map = hashmap_group_data_new(arena);
+    struct hashmap_group_ids group_ids = hashmap_group_ids_new(allocator);
+    struct hashmap_group_data group_data_map
+        = hashmap_group_data_new(allocator);
     graph_create_groups(
-        arena, *obj_graph, transitive_edges, &group_ids, &group_data_map
+        allocator, *obj_graph, transitive_edges, &group_ids, &group_data_map
     );
-    graph_create_edges(arena, obj_graph, &group_ids, &group_data_map);
-    return graph_generate_order(arena, &group_data_map);
+    graph_create_edges(allocator, obj_graph, &group_ids, &group_data_map);
+    return graph_generate_order(allocator, &group_data_map);
 }
 
 struct hashset_sizes*
 graph_add_function(
-    struct arena* arena, struct object_graph* obj_graph, usize const function
+    struct allocator* allocator, struct object_graph* obj_graph,
+    usize const function
 ) {
     if (hashmap_adjacency_contains(obj_graph->adjacency_lists, function)) {
         return hashmap_adjacency_find(&obj_graph->adjacency_lists, function);
     } else {
-        auto new_set                   = hashset_string_new(arena);
-        struct hashset_sizes* heap_set = arena_allocate(arena, sizeof(new_set));
+        auto new_set = hashset_string_new(allocator);
+        struct hashset_sizes* heap_set
+            = allocator_allocate(allocator, sizeof(new_set));
         memcpy(heap_set, &new_set, sizeof(new_set));
         hashmap_adjacency_add(&obj_graph->adjacency_lists, function, heap_set);
         return heap_set;
@@ -224,10 +229,10 @@ graph_add_function(
 
 void
 graph_add_edge(
-    struct arena* arena, struct object_graph* obj_graph, usize const from,
-    usize const to
+    struct allocator* allocator, struct object_graph* obj_graph,
+    usize const from, usize const to
 ) {
-    struct hashset_sizes* set = graph_add_function(arena, obj_graph, from);
+    struct hashset_sizes* set = graph_add_function(allocator, obj_graph, from);
     hashset_sizes_add(set, to);
     hashset_edge_add(
         &obj_graph->edges, (struct edge){ .from = from, .to = to }

@@ -39,7 +39,7 @@ new_type_name(struct type_context* context) {
     }
     temp = context->last_id;
 
-    auto name    = string_init_empty(context->arena, count);
+    auto name    = string_init_empty(context->allocator, count);
     usize i      = 2;
     name.data[0] = '\'';
     name.data[1] = '\'';
@@ -54,10 +54,11 @@ new_type_name(struct type_context* context) {
 
 static struct type*
 create_type_var(struct type_context* context) {
-    auto name         = new_type_name(context);
-    struct type* type = arena_allocate(context->arena, sizeof(struct type));
-    type->type        = TYPE_TYPE_VAR;
-    type->var.name    = name;
+    auto name = new_type_name(context);
+    struct type* type
+        = allocator_allocate(context->allocator, sizeof(struct type));
+    type->type     = TYPE_TYPE_VAR;
+    type->var.name = name;
     return type;
 }
 
@@ -136,10 +137,10 @@ env_bind(struct type_env* type_env, struct string name, struct type* type) {
 static struct type_env*
 new_scope(struct type_env* type_env) {
     struct type_env* new_env
-        = arena_allocate(type_env->arena, sizeof(struct type_env));
-    new_env->arena  = type_env->arena;
-    new_env->parent = type_env;
-    new_env->names  = hashmap_string_type_new(type_env->arena);
+        = allocator_allocate(type_env->allocator, sizeof(struct type_env));
+    new_env->allocator = type_env->allocator;
+    new_env->parent    = type_env;
+    new_env->names     = hashmap_string_type_new(type_env->allocator);
     return new_env;
 }
 
@@ -149,16 +150,18 @@ typecheck_properties_first(
     struct _ast_element* element
 ) {
     assert(element->type == AST_ELEMENT_TYPE_PROPERTIES);
-    struct type* type = arena_allocate(context->arena, sizeof(struct type));
-    type->type        = TYPE_TYPE_PROPERTIES;
-    type->properties  = vector_type_property_ptr_new(context->arena);
+    struct type* type
+        = allocator_allocate(context->allocator, sizeof(struct type));
+    type->type       = TYPE_TYPE_PROPERTIES;
+    type->properties = vector_type_property_ptr_new(context->allocator);
 
     vector_foreach(element->properties, prop) {
-        struct type* prop_type = create_type_var(context);
-        struct type_property* a
-            = arena_allocate(context->arena, sizeof(struct type_property));
+        struct type* prop_type  = create_type_var(context);
+        struct type_property* a = allocator_allocate(
+            context->allocator, sizeof(struct type_property)
+        );
         a->type = prop_type;
-        a->name = string_duplicate(context->arena, prop->name);
+        a->name = string_duplicate(context->allocator, prop->name);
         vector_type_property_ptr_add(&type->properties, a);
         prop->type = prop_type;
     }
@@ -192,14 +195,14 @@ typecheck(
     switch (element->type) {
         case AST_ELEMENT_TYPE_INTEGER: {
             struct type* type
-                = arena_allocate(context->arena, sizeof(struct type));
+                = allocator_allocate(context->allocator, sizeof(struct type));
             type->type      = TYPE_TYPE_BASE;
             type->base.name = from_cstr("Int");
             return type;
         }
         case AST_ELEMENT_TYPE_STRING: {
             struct type* type
-                = arena_allocate(context->arena, sizeof(struct type));
+                = allocator_allocate(context->allocator, sizeof(struct type));
             type->type      = TYPE_TYPE_BASE;
             type->base.name = from_cstr("Str");
             return type;
@@ -216,7 +219,7 @@ static struct typecheck_env
 new_typecheck_env(struct typecheck_env* parent) {
     return (struct typecheck_env){
         .parent = parent,
-        .names  = hashmap_string_id_new(parent->names.arena),
+        .names  = hashmap_string_id_new(parent->names.allocator),
     };
 }
 
@@ -231,7 +234,7 @@ typecheck_env_find(struct typecheck_env env, struct string const name) {
 
 void
 typecheck_init_properties(
-    struct arena* arena, struct object_graph* object_graph,
+    struct allocator* allocator, struct object_graph* object_graph,
     struct vector_ast_property_ptr properties, struct typecheck_env* env
 ) {
     auto new_env = new_typecheck_env(env);
@@ -240,21 +243,21 @@ typecheck_init_properties(
     }
 
     vector_foreach(properties, prop) {
-        graph_add_function(arena, object_graph, prop->id);
+        graph_add_function(allocator, object_graph, prop->id);
         if (prop->value->type == AST_ELEMENT_TYPE_PROPERTIES) {
             vector_foreach(prop->value->properties, p) {
                 if (p->value->type == AST_ELEMENT_TYPE_PROPERTIES
                     || p->value->type == AST_ELEMENT_TYPE_ID) {
-                    graph_add_edge(arena, object_graph, p->id, prop->id);
+                    graph_add_edge(allocator, object_graph, p->id, prop->id);
                 }
             }
             typecheck_init_properties(
-                arena, object_graph, prop->value->properties, &new_env
+                allocator, object_graph, prop->value->properties, &new_env
             );
         } else if (prop->value->type == AST_ELEMENT_TYPE_ID) {
             auto name = prop->value->id.id;
             auto id   = typecheck_env_find(new_env, name);
-            graph_add_edge(arena, object_graph, id, prop->id);
+            graph_add_edge(allocator, object_graph, id, prop->id);
         }
     }
 }

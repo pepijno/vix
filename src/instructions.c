@@ -10,7 +10,7 @@ VECTOR_IMPL(struct instruction, instruction)
 
 void
 compile(
-    struct arena* arena, struct compilation_env compilation_env,
+    struct allocator* allocator, struct compilation_env compilation_env,
     struct _ast_element element, struct vector_instruction* instructions
 ) {
     switch (element.type) {
@@ -30,7 +30,8 @@ compile(
                 ((struct instruction){
                     .type     = INSTRUCTION_TYPE_PUSH_STR,
                     .push_str = ((struct instruction_push_str){
-                        .value = string_duplicate(arena, element.string.value),
+                        .value
+                        = string_duplicate(allocator, element.string.value),
                     }),
                 })
             );
@@ -53,7 +54,7 @@ compile(
                     ((struct instruction){
                         .type        = INSTRUCTION_TYPE_PUSH_GLOBAL,
                         .push_global = ((struct instruction_push_global){
-                            .name = string_duplicate(arena, element.id.id),
+                            .name = string_duplicate(allocator, element.id.id),
                         }),
                     })
                 );
@@ -62,7 +63,7 @@ compile(
         case AST_ELEMENT_TYPE_PROPERTIES:
             usize size = 0;
             vector_foreach(element.properties, prop) {
-                compile(arena, compilation_env, *prop->value, instructions);
+                compile(allocator, compilation_env, *prop->value, instructions);
                 size += 1;
             }
             vector_instruction_add(

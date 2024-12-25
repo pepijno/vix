@@ -1,8 +1,8 @@
 #pragma once
 
-#include "instructions.h"
 #include "defs.h"
 #include "hashmap.h"
+#include "instructions.h"
 #include "vector.h"
 
 struct type_var {
@@ -46,16 +46,16 @@ struct type {
 
 HASHMAP_DEFS(struct string, struct type*, string_type)
 
-struct arena;
+struct allocator;
 
 struct type_context {
     usize last_id;
-    struct arena* arena;
+    struct allocator* allocator;
     struct hashmap_string_type types;
 };
 
 struct type_env {
-    struct arena* arena;
+    struct allocator* allocator;
     struct hashmap_string_type names;
     struct type_env* parent;
 };
@@ -87,6 +87,6 @@ struct object_graph;
 struct vector_ast_property_ptr;
 
 void typecheck_init_properties(
-    struct arena* arena, struct object_graph* object_graph,
+    struct allocator* allocator, struct object_graph* object_graph,
     struct vector_ast_property_ptr properties, struct typecheck_env* env
 );

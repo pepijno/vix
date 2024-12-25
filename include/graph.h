@@ -32,16 +32,16 @@ struct object_graph {
     struct hashset_edge edges;
 };
 
-struct arena;
+struct allocator;
 
 struct vector_group_ptr graph_compute_order(
-    struct arena* arena, struct object_graph* obj_graph
+    struct allocator* allocator, struct object_graph* obj_graph
 );
 struct hashset_sizes* graph_add_function(
-    struct arena* arena, struct object_graph* obj_graph,
+    struct allocator* allocator, struct object_graph* obj_graph,
     usize const function
 );
 void graph_add_edge(
-    struct arena* arena, struct object_graph* obj_graph,
+    struct allocator* allocator, struct object_graph* obj_graph,
     usize const from, usize const to
 );

@@ -26,9 +26,9 @@ struct location {
     i32 column_number;
 };
 
-struct arena;
+struct allocator;
 
-void error_line(struct arena* arena, struct location location);
+void error_line(struct allocator* allocator, struct location location);
 struct string generate_name(
-    struct arena* arena, u32 const id, struct string const format
+    struct allocator* allocator, u32 const id, struct string const format
 );
