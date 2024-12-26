@@ -14,7 +14,7 @@
 struct string* sources;
 
 noreturn void
-vix_panic(struct string format, ...) {
+vix_panic(struct string const format, ...) {
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "%s:%d ", __FILE__, __LINE__);
@@ -31,7 +31,10 @@ vix_unreachable(void) {
 }
 
 static i32
-getline(struct allocator* allocator, char** lineptr, i32* n, FILE* stream) {
+getline(
+    struct allocator allocator[static const 1], char** lineptr,
+    i32 n[static const 1], FILE stream[static const 1]
+) {
     char* bufptr = NULL;
     char* p      = bufptr;
 
@@ -82,7 +85,9 @@ getline(struct allocator* allocator, char** lineptr, i32* n, FILE* stream) {
 }
 
 void
-error_line(struct allocator* allocator, struct location location) {
+error_line(
+    struct allocator allocator[static const 1], struct location const location
+) {
     struct string path = sources[location.file];
     struct stat filestat;
     if (stat(path.data, &filestat) == -1 || !S_ISREG(filestat.st_mode)) {
@@ -120,7 +125,8 @@ error_line(struct allocator* allocator, struct location location) {
 
 struct string
 generate_name(
-    struct allocator* allocator, u32 const id, struct string const format
+    struct allocator allocator[static const 1], u32 const id,
+    struct string const format
 ) {
     i32 n        = snprintf(nullptr, 0, format.data, id);
     char* buffer = allocator_allocate(allocator, n + 1);

@@ -25,6 +25,6 @@ struct codepoint {
     bool ok;
 };
 
-struct utf8char utf8_encode(struct codepoint point);
-struct codepoint utf8_decode(struct utf8char utf8_char);
-struct codepoint utf8_get(FILE* f);
+struct utf8char utf8_encode(struct codepoint const point);
+struct codepoint utf8_decode(struct utf8char const utf8_char);
+struct codepoint utf8_get(FILE f[static const 1]);

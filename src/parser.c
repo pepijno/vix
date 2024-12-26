@@ -2,22 +2,23 @@
 
 #include "allocator.h"
 #include "ast.h"
-#include "lexer.h"
 
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdnoreturn.h>
 
-VECTOR_IMPL(struct _ast_property*, ast_property_ptr)
+VECTOR_IMPL(struct ast_property*, ast_property_ptr)
 
 static noreturn void
-vsynerror(struct allocator* allocator, struct token* token, va_list ap) {
+vsynerror(
+    struct allocator allocator[static const 1], struct token token, va_list ap
+) {
     enum lex_token_type type = va_arg(ap, enum lex_token_type);
 
     fprintf(
         stderr, STR_FMT ":%d:%d: syntax error: expected ",
-        STR_ARG(sources[token->location.file]), token->location.line_number,
-        token->location.column_number
+        STR_ARG(sources[token.location.file]), token.location.line_number,
+        token.location.column_number
     );
 
     while (type != TOKEN_EOF) {
@@ -31,13 +32,13 @@ vsynerror(struct allocator* allocator, struct token* token, va_list ap) {
         fprintf(stderr, ", ");
     }
 
-    fprintf(stderr, "found '" STR_FMT "'\n", STR_ARG(token_names[token->type]));
-    error_line(allocator, token->location);
+    fprintf(stderr, "found '" STR_FMT "'\n", STR_ARG(token_names[token.type]));
+    error_line(allocator, token.location);
     exit(EXIT_PARSE);
 }
 
 static noreturn void
-synerror(struct allocator* allocator, struct token* token, ...) {
+synerror(struct allocator allocator[static const 1], struct token token, ...) {
     va_list ap;
     va_start(ap, token);
     vsynerror(allocator, token, ap);
@@ -46,7 +47,8 @@ synerror(struct allocator* allocator, struct token* token, ...) {
 
 static void
 synassert(
-    struct allocator* allocator, bool condition, struct token* token, ...
+    struct allocator allocator[static const 1], bool condition,
+    struct token token, ...
 ) {
     if (!condition) {
         va_list ap;
@@ -58,30 +60,36 @@ synassert(
 
 static void
 expect_token(
-    struct allocator* allocator, struct lexer* lexer,
-    enum lex_token_type token_type, struct token* token
+    struct lexer lexer[static const 1], enum lex_token_type token_type,
+    struct token token[const 1]
 ) {
     struct token _token = {};
     struct token* out   = token != nullptr ? token : &_token;
-    lex(allocator, lexer, out);
-    synassert(allocator, out->type == token_type, out, token_type, TOKEN_EOF);
+    lex(lexer, out);
+    synassert(
+        lexer->allocator, out->type == token_type, *out, token_type, TOKEN_EOF
+    );
     if (token == nullptr) {
         token_finish(out);
     }
 }
 
-static struct _ast_property* parse_property(
-    struct parser_context* parser_context, struct lexer* lexer
+static struct ast_property* parse_property(
+    struct parser_context parser_context[static const 1],
+    struct lexer lexer[static const 1]
 );
 
-static struct _ast_element*
-parse_element(struct parser_context* parser_context, struct lexer* lexer) {
-    struct token token           = {};
-    struct _ast_element* element = allocator_allocate(
-        parser_context->allocator, sizeof(struct _ast_element)
+static struct ast_element*
+parse_element(
+    struct parser_context parser_context[static const 1],
+    struct lexer lexer[static const 1]
+) {
+    struct token token          = {};
+    struct ast_element* element = allocator_allocate(
+        parser_context->allocator, sizeof(struct ast_element)
     );
 
-    switch (lex(parser_context->allocator, lexer, &token)) {
+    switch (lex(lexer, &token)) {
         case TOKEN_NAME:
             element->type = AST_ELEMENT_TYPE_ID;
             element->id.id
@@ -94,13 +102,13 @@ parse_element(struct parser_context* parser_context, struct lexer* lexer) {
             element->properties
                 = vector_ast_property_ptr_new(parser_context->allocator);
             while (!break_out) {
-                switch (lex(parser_context->allocator, lexer, &token2)) {
+                switch (lex(lexer, &token2)) {
                     case TOKEN_CLOSE_BRACE:
                         break_out = true;
                         break;
                     default:
                         unlex(lexer, &token2);
-                        struct _ast_property* next
+                        struct ast_property* next
                             = parse_property(parser_context, lexer);
                         vector_ast_property_ptr_add(&element->properties, next);
                         break;
@@ -124,39 +132,45 @@ parse_element(struct parser_context* parser_context, struct lexer* lexer) {
     return element;
 }
 
-static struct _ast_property*
-parse_property(struct parser_context* parser_context, struct lexer* lexer) {
+static struct ast_property*
+parse_property(
+    struct parser_context parser_context[static const 1],
+    struct lexer lexer[static const 1]
+) {
     struct token token       = {};
-    enum lex_token_type type = lex(parser_context->allocator, lexer, &token);
+    enum lex_token_type type = lex(lexer, &token);
     if (type != TOKEN_NAME) {
         unlex(lexer, &token);
         return nullptr;
     }
-    struct _ast_property* property = allocator_allocate(
-        parser_context->allocator, sizeof(struct _ast_property)
+    struct ast_property* property = allocator_allocate(
+        parser_context->allocator, sizeof(struct ast_property)
     );
     property->id = parser_context->next_id;
     parser_context->next_id += 1;
     property->name = string_duplicate(parser_context->allocator, token.name);
-    expect_token(parser_context->allocator, lexer, TOKEN_ASSIGN, nullptr);
+    expect_token(lexer, TOKEN_ASSIGN, nullptr);
     property->value = parse_element(parser_context, lexer);
-    expect_token(parser_context->allocator, lexer, TOKEN_SEMICOLON, nullptr);
+    expect_token(lexer, TOKEN_SEMICOLON, nullptr);
 
     hashmap_properties_add(&parser_context->properties, property->id, property);
 
     return property;
 }
 
-static struct _ast_element*
-parse_root(struct parser_context* parser_context, struct lexer* lexer) {
-    struct _ast_element* root = allocator_allocate(
-        parser_context->allocator, sizeof(struct _ast_element)
+static struct ast_element*
+parse_root(
+    struct parser_context parser_context[static const 1],
+    struct lexer lexer[static const 1]
+) {
+    struct ast_element* root = allocator_allocate(
+        parser_context->allocator, sizeof(struct ast_element)
     );
     root->type       = AST_ELEMENT_TYPE_PROPERTIES;
     root->properties = vector_ast_property_ptr_new(parser_context->allocator);
 
     for (;;) {
-        struct _ast_property* property = parse_property(parser_context, lexer);
+        struct ast_property* property = parse_property(parser_context, lexer);
         if (property == nullptr) {
             break;
         }
@@ -166,9 +180,12 @@ parse_root(struct parser_context* parser_context, struct lexer* lexer) {
     return root;
 }
 
-struct _ast_element*
-_parse(struct parser_context* parser_context, struct lexer* lexer) {
-    struct _ast_element* root = parse_root(parser_context, lexer);
-    expect_token(parser_context->allocator, lexer, TOKEN_EOF, nullptr);
+struct ast_element*
+parse(
+    struct parser_context parser_context[static const 1],
+    struct lexer lexer[static const 1]
+) {
+    struct ast_element* root = parse_root(parser_context, lexer);
+    expect_token(lexer, TOKEN_EOF, nullptr);
     return root;
 }

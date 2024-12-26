@@ -7,29 +7,26 @@
 
 #define VECTOR_NAME(__name) CONCAT(vector_, __name)
 
-#define VECTOR_STRUCT(__type, __name) \
-    struct VECTOR_NAME(__name) {      \
-        struct allocator* allocator;  \
-        usize length;                 \
-        usize capacity;               \
-        __type* data;                 \
-    };
-
-#define VECTOR_NEW_DEF(__name) \
-    struct VECTOR_NAME(__name) \
-        CONCAT(VECTOR_NAME(__name), _new)(struct allocator * allocator);
-
-#define VECTOR_ADD_DEF(__type, __name)                      \
-    void CONCAT(VECTOR_NAME(__name), _add)(                 \
-        struct VECTOR_NAME(__name) * __name, __type element \
+#define VECTOR_DEFS(__type, __name)                                      \
+    struct VECTOR_NAME(__name) {                                         \
+        struct allocator* allocator;                                     \
+        usize length;                                                    \
+        usize capacity;                                                  \
+        __type* data;                                                    \
+    };                                                                   \
+                                                                         \
+    struct VECTOR_NAME(__name)                                           \
+        CONCAT(VECTOR_NAME(__name), _new)(struct allocator * allocator); \
+                                                                         \
+    void CONCAT(VECTOR_NAME(__name), _add)(                              \
+        struct VECTOR_NAME(__name) * __name, __type element              \
+    );                                                                   \
+                                                                         \
+    void CONCAT(VECTOR_NAME(__name), _clear)(                            \
+        struct VECTOR_NAME(__name) * __name                              \
     );
 
-#define VECTOR_CLEAR_DEF(__name)              \
-    void CONCAT(VECTOR_NAME(__name), _clear)( \
-        struct VECTOR_NAME(__name) * __name   \
-    );
-
-#define VECTOR_NEW_IMPL(__type, __name)                                   \
+#define VECTOR_IMPL(__type, __name)                                       \
     struct VECTOR_NAME(__name)                                            \
         CONCAT(VECTOR_NAME(__name), _new)(struct allocator * allocator) { \
         usize capacity                    = 32;                           \
@@ -41,41 +38,28 @@
         vector.data                                                       \
             = allocator_allocate(allocator, sizeof(__type) * capacity);   \
         return vector;                                                    \
+    }                                                                     \
+                                                                          \
+    void CONCAT(VECTOR_NAME(__name), _add)(                               \
+        struct VECTOR_NAME(__name) * __name, __type element               \
+    ) {                                                                   \
+        if ((__name)->length == (__name)->capacity) {                     \
+            usize old_size = (__name)->capacity * sizeof(__type);         \
+            usize new_size = old_size * 2;                                \
+            (__name)->data = allocator_resize(                            \
+                (__name)->allocator, (__name)->data, old_size, new_size   \
+            );                                                            \
+            (__name)->capacity *= 2;                                      \
+        }                                                                 \
+        (__name)->data[(__name)->length] = element;                       \
+        (__name)->length += 1;                                            \
+    }                                                                     \
+                                                                          \
+    void CONCAT(VECTOR_NAME(__name), _clear)(                             \
+        struct VECTOR_NAME(__name) * __name                               \
+    ) {                                                                   \
+        (__name)->length = 0;                                             \
     }
-
-#define VECTOR_ADD_IMPL(__type, __name)                                 \
-    void CONCAT(VECTOR_NAME(__name), _add)(                             \
-        struct VECTOR_NAME(__name) * __name, __type element             \
-    ) {                                                                 \
-        if ((__name)->length == (__name)->capacity) {                   \
-            usize old_size = (__name)->capacity * sizeof(__type);       \
-            usize new_size = old_size * 2;                              \
-            (__name)->data = allocator_resize(                          \
-                (__name)->allocator, (__name)->data, old_size, new_size \
-            );                                                          \
-            (__name)->capacity *= 2;                                    \
-        }                                                               \
-        (__name)->data[(__name)->length] = element;                     \
-        (__name)->length += 1;                                          \
-    }
-
-#define VECTOR_CLEAR_IMPL(__name)             \
-    void CONCAT(VECTOR_NAME(__name), _clear)( \
-        struct VECTOR_NAME(__name) * __name   \
-    ) {                                       \
-        (__name)->length = 0;                 \
-    }
-
-#define VECTOR_DEFS(__type, __name) \
-    VECTOR_STRUCT(__type, __name)   \
-    VECTOR_NEW_DEF(__name)          \
-    VECTOR_ADD_DEF(__type, __name)  \
-    VECTOR_CLEAR_DEF(__name)
-
-#define VECTOR_IMPL(__type, __name) \
-    VECTOR_NEW_IMPL(__type, __name) \
-    VECTOR_ADD_IMPL(__type, __name) \
-    VECTOR_CLEAR_IMPL(__name)
 
 #define vector_foreach(__vector, __name)                             \
     auto CONCAT(_foreach_vector, __LINE__) = (__vector);             \

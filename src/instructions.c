@@ -10,8 +10,10 @@ VECTOR_IMPL(struct instruction, instruction)
 
 void
 compile(
-    struct allocator* allocator, struct compilation_env compilation_env,
-    struct _ast_element element, struct vector_instruction* instructions
+    struct allocator allocator[static const 1],
+    struct compilation_env const compilation_env,
+    struct ast_element const element,
+    struct vector_instruction instructions[static const 1]
 ) {
     switch (element.type) {
         case AST_ELEMENT_TYPE_INTEGER:
@@ -79,7 +81,7 @@ compile(
 }
 
 void
-_emit(struct vector_instruction instructions) {
+emit(struct vector_instruction const instructions) {
     vector_foreach(instructions, instruction) {
         switch (instruction.type) {
             case INSTRUCTION_TYPE_PUSH_INT:

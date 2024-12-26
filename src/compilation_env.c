@@ -3,7 +3,9 @@
 #include "util.h"
 
 usize
-get_offset(struct compilation_env compilation_env, struct string name) {
+get_offset(
+    struct compilation_env const compilation_env, struct string const name
+) {
     switch (compilation_env.type) {
         case COMPILATION_ENV_TYPE_VAR:
             if (strings_equal(compilation_env.env_var.name, name)) {
@@ -25,7 +27,9 @@ get_offset(struct compilation_env compilation_env, struct string name) {
 }
 
 bool
-has_variable(struct compilation_env compilation_env, struct string name) {
+has_variable(
+    struct compilation_env const compilation_env, struct string const name
+) {
     switch (compilation_env.type) {
         case COMPILATION_ENV_TYPE_VAR:
             if (strings_equal(compilation_env.env_var.name, name)) {

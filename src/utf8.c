@@ -8,7 +8,7 @@ static u8 const utf8_length[]
 #define utf8length(byte) utf8_length[(byte) >> 4]
 
 struct utf8char
-utf8_encode(struct codepoint point) {
+utf8_encode(struct codepoint const point) {
     if (!point.ok) {
         return UTF8_INVALID;
     }
@@ -58,7 +58,7 @@ utf8_encode(struct codepoint point) {
 }
 
 struct codepoint
-utf8_decode(struct utf8char utf8_char) {
+utf8_decode(struct utf8char const utf8_char) {
     struct codepoint cp = {
         .ok = true,
     };
@@ -93,7 +93,7 @@ utf8_decode(struct utf8char utf8_char) {
 }
 
 struct codepoint
-utf8_get(FILE* f) {
+utf8_get(FILE f[static const 1]) {
     if (feof(f)) {
         return CODEPOINT_INVALID;
     }

@@ -35,13 +35,15 @@ struct object_graph {
 struct allocator;
 
 struct vector_group_ptr graph_compute_order(
-    struct allocator* allocator, struct object_graph* obj_graph
+    struct allocator allocator[static const 1],
+    struct object_graph obj_graph[static const 1]
 );
 struct hashset_sizes* graph_add_function(
-    struct allocator* allocator, struct object_graph* obj_graph,
-    usize const function
+    struct allocator allocator[static const 1],
+    struct object_graph obj_graph[static const 1], usize const function
 );
 void graph_add_edge(
-    struct allocator* allocator, struct object_graph* obj_graph,
-    usize const from, usize const to
+    struct allocator allocator[static const 1],
+    struct object_graph obj_graph[static const 1], usize const from,
+    usize const to
 );

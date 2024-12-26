@@ -21,4 +21,3 @@ typedef size_t usize;
 
 #define CONCAT_INNER(a, b) a##b
 #define CONCAT(a, b)       CONCAT_INNER(a, b)
-#define STRINGIFY(a)       #a

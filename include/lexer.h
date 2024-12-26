@@ -42,6 +42,7 @@ struct token {
 };
 
 struct lexer {
+    struct allocator* allocator;
     FILE* in;
     char* buffer;
     usize buffer_size;
@@ -53,10 +54,15 @@ struct lexer {
 
 struct allocator;
 
-struct lexer lexer_new(struct allocator* allocator, FILE* f, i32 file_id);
-void lexer_finish(struct lexer* lexer);
-enum lex_token_type lex(
-    struct allocator* allocator, struct lexer* lexer, struct token* out
+struct lexer lexer_new(
+    struct allocator allocator[static const 1], FILE f[static const 1],
+    i32 const file_id
 );
-void unlex(struct lexer* lexer, struct token* out);
-void token_finish(struct token* token);
+void lexer_finish(struct lexer lexer[static const 1]);
+enum lex_token_type lex(
+    struct lexer lexer[static const 1], struct token out[static const 1]
+);
+void unlex(
+    struct lexer lexer[static const 1], struct token out[static const 1]
+);
+void token_finish(struct token token[static const 1]);

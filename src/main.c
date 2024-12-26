@@ -4,7 +4,6 @@
 #include "compilation_env.h"
 #include "defs.h"
 #include "graph.h"
-#include "hash.h"
 #include "hashmap.h"
 #include "instructions.h"
 #include "lexer.h"
@@ -16,21 +15,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-u64
-hash(u8* bytes) {
-    return fnv1a_u64(HASH_INIT, *((u64*) bytes));
-}
-
-bool
-keys_equal(u8* key1, u8* key2) {
-    return *((u64*) key1) == *((u64*) key2);
-}
-
-bool
-is_key_zero(u8* bytes) {
-    return *((u64*) bytes) == 0;
-}
-
 i32
 main(i32 argc, char* argv[]) {
     if (argc < 2) {
@@ -40,7 +24,7 @@ main(i32 argc, char* argv[]) {
 
     usize arena_buffer_size    = 1024 * 1024 * 128;
     u8* arena_buffer           = malloc(arena_buffer_size);
-    struct arena arena         = arena_init(arena_buffer, arena_buffer_size);
+    struct arena arena         = arena_init(arena_buffer_size, arena_buffer);
     struct allocator allocator = arena_allocator_init(&arena);
 
     FILE* f            = fopen(argv[1], "rb");
@@ -54,8 +38,8 @@ main(i32 argc, char* argv[]) {
         .properties = hashmap_properties_new(&allocator),
     };
 
-    struct _ast_element* root = _parse(&parser_context, &lexer);
-    print_element(root, 0);
+    struct ast_element* root = parse(&parser_context, &lexer);
+    print_element(*root, 0);
 
     struct object_graph obj_graph = {
         .edges           = hashset_edge_new(&allocator),
@@ -75,9 +59,10 @@ main(i32 argc, char* argv[]) {
 
     vector_foreach(groups, group) {
         hashset_foreach(group->members, member) {
-            auto str
-                = hashmap_properties_find(&parser_context.properties, member);
-            printf(STR_FMT ", ", STR_ARG(str->name));
+            auto search_result
+                = hashmap_properties_find(parser_context.properties, member);
+            assert(search_result.found);
+            printf(STR_FMT ", ", STR_ARG(search_result.value->name));
         }
         printf("\n");
     }
@@ -94,8 +79,10 @@ main(i32 argc, char* argv[]) {
 
     vector_foreach(groups, group) {
         hashset_foreach(group->members, member) {
-            auto prop
-                = hashmap_properties_find(&parser_context.properties, member);
+            auto search_result
+                = hashmap_properties_find(parser_context.properties, member);
+            assert(search_result.found);
+            auto prop = search_result.value;
             if (prop->value->type == AST_ELEMENT_TYPE_PROPERTIES) {
                 typecheck_properties_first(
                     &context, &env, prop->name, prop->value
@@ -110,7 +97,7 @@ main(i32 argc, char* argv[]) {
 
     hashmap_foreach(env.names, type) {
         printf(STR_FMT ": ", STR_ARG(type.key));
-        _print_type(&context, type.value, 0);
+        print_type(context, *type.value, 0);
     }
 
     struct compilation_env compilation_env = {
@@ -126,7 +113,7 @@ main(i32 argc, char* argv[]) {
         vector_foreach(instructions, instruction) {
             print_instruction(instruction, 0);
         }
-        _emit(instructions);
+        emit(instructions);
     }
 
     return 0;

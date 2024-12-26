@@ -10,8 +10,8 @@ enum error_color {
 };
 
 struct error_message {
-    i32 const line_start;
-    i32 const column_start;
+    usize const line_start;
+    usize const column_start;
     struct string message;
     struct string path;
     struct string line_buffer;
@@ -19,14 +19,17 @@ struct error_message {
 };
 
 void print_error_message(
-    struct error_message* error_message, enum error_color color
+    struct error_message error_message[static const 1],
+    enum error_color const color
 );
 
 void error_message_add_note(
-    struct error_message* parent, struct error_message* note
+    struct error_message parent[static const 1],
+    struct error_message note[static const 1]
 );
 
 struct error_message error_message_create_with_line(
-    struct string path, i32 line, i32 column, struct string source,
-    i32* line_offsets, struct string message
+    struct string const path, usize const line, usize const column,
+    struct string const source, usize* const line_offsets,
+    struct string const message
 );

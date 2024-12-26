@@ -1,6 +1,8 @@
 #pragma once
 
+#include "ast.h"
 #include "defs.h"
+#include "graph.h"
 #include "hashmap.h"
 #include "instructions.h"
 #include "vector.h"
@@ -46,8 +48,6 @@ struct type {
 
 HASHMAP_DEFS(struct string, struct type*, string_type)
 
-struct allocator;
-
 struct type_context {
     usize last_id;
     struct allocator* allocator;
@@ -67,26 +67,31 @@ struct typecheck_env {
     struct hashmap_string_id names;
 };
 
-struct _ast_element;
-
-void env_bind(struct type_env* type_env, struct string name, struct type* type);
+void env_bind(
+    struct type_env type_env[static const 1], struct string const name,
+    struct type type[static const 1]
+);
 struct type* typecheck(
-    struct type_context* context, struct type_env* env,
-    struct _ast_element* element
+    struct type_context context[static const 1],
+    struct type_env env[static const 1],
+    struct ast_element element[static const 1]
 );
 void typecheck_properties_first(
-    struct type_context* context, struct type_env* env, struct string name,
-    struct _ast_element* element
+    struct type_context context[static const 1],
+    struct type_env env[static const 1], struct string const name,
+    struct ast_element element[static const 1]
 );
 void typecheck_properties_second(
-    struct type_context* context, struct type_env* env,
-    struct _ast_element* element
+    struct type_context context[static const 1],
+    struct type_env env[static const 1],
+    struct ast_element element[static const 1]
 );
 
-struct object_graph;
 struct vector_ast_property_ptr;
 
 void typecheck_init_properties(
-    struct allocator* allocator, struct object_graph* object_graph,
-    struct vector_ast_property_ptr properties, struct typecheck_env* env
+    struct allocator allocator[static const 1],
+    struct object_graph object_graph[static const 1],
+    struct vector_ast_property_ptr properties,
+    struct typecheck_env env[static const 1]
 );

@@ -6,15 +6,15 @@
 #include <string.h>
 
 static bool
-is_power_of_two(uptr x) {
+is_power_of_two(uptr const x) {
     return (x & (x - 1)) == 0;
 }
 
 static uptr
-align_forward(uptr ptr, usize align) {
+align_forward(uptr const ptr, usize const align) {
     assert(is_power_of_two(align));
 
-    uptr modulo = ptr & (align - 1);
+    uptr const modulo = ptr & (align - 1);
 
     if (modulo != 0) {
         return ptr + align - modulo;
@@ -24,16 +24,18 @@ align_forward(uptr ptr, usize align) {
 }
 
 static void*
-arena_allocate_align(struct arena* arena, usize size, usize align) {
-    uptr curr_ptr = (uptr) arena->buffer + (uptr) arena->current_offset;
-    uptr offset   = align_forward(curr_ptr, align);
+arena_allocate_align(
+    struct arena arena[static const 1], usize const size, usize const align
+) {
+    uptr const curr_ptr = (uptr) arena->buffer + (uptr) arena->current_offset;
+    uptr offset         = align_forward(curr_ptr, align);
     offset -= (uptr) arena->buffer;
 
     if (offset + size > arena->buffer_length) {
         return nullptr;
     }
 
-    u8* ptr                = &arena->buffer[offset];
+    u8* const ptr          = &arena->buffer[offset];
     arena->previous_offset = offset;
     arena->current_offset  = offset + size;
 
@@ -42,7 +44,7 @@ arena_allocate_align(struct arena* arena, usize size, usize align) {
 }
 
 static void*
-arena_allocate(void* context, size_t size) {
+arena_allocate(void* const context, size_t const size) {
     return arena_allocate_align(
         (struct arena*) context, size, DEFAULT_ALIGNMENT
     );
@@ -50,10 +52,10 @@ arena_allocate(void* context, size_t size) {
 
 static void*
 arena_resize_align(
-    struct arena* arena, void* old_memory, usize old_size, usize new_size,
-    usize align
+    struct arena arena[static const 1], void* const old_memory,
+    usize const old_size, usize const new_size, usize const align
 ) {
-    u8* old_mem = (u8*) old_memory;
+    u8* const old_mem = (u8*) old_memory;
 
     assert(is_power_of_two(align));
 
@@ -73,8 +75,9 @@ arena_resize_align(
             }
             return old_memory;
         } else {
-            void* new_memory = arena_allocate_align(arena, new_size, align);
-            size_t copy_size = old_size < new_size ? old_size : new_size;
+            void* const new_memory
+                = arena_allocate_align(arena, new_size, align);
+            usize const copy_size = old_size < new_size ? old_size : new_size;
             memmove(new_memory, old_memory, copy_size);
             return new_memory;
         }
@@ -86,7 +89,8 @@ arena_resize_align(
 
 static void*
 arena_resize(
-    void* context, void* old_memory, size_t old_size, size_t new_size
+    void* const context, void* const old_memory, usize const old_size,
+    usize const new_size
 ) {
     return arena_resize_align(
         (struct arena*) context, old_memory, old_size, new_size,
@@ -95,11 +99,17 @@ arena_resize(
 }
 
 static void
-arena_free(void* context, void* memory, usize size) {
+arena_free(void* const context, void const* const memory, usize const size) {
+    (void)context;
+    (void)memory;
+    (void)size;
 }
 
 struct arena
-arena_init(void* backing_buffer, usize backing_buffer_length) {
+arena_init(
+    usize const backing_buffer_length,
+    u8 backing_buffer[static const backing_buffer_length]
+) {
     return (struct arena){
         .buffer          = backing_buffer,
         .buffer_length   = backing_buffer_length,
@@ -109,7 +119,7 @@ arena_init(void* backing_buffer, usize backing_buffer_length) {
 }
 
 struct allocator
-arena_allocator_init(struct arena* arena) {
+arena_allocator_init(struct arena arena[static const 1]) {
     return (struct allocator){
         .allocate = arena_allocate,
         .resize   = arena_resize,
@@ -119,7 +129,7 @@ arena_allocator_init(struct arena* arena) {
 }
 
 void
-arena_free_all(struct arena* arena) {
+arena_free_all(struct arena arena[static const 1]) {
     arena->buffer_length  = 0;
     arena->current_offset = 0;
 }

@@ -18,19 +18,22 @@
         __type* data;                                                    \
     };                                                                   \
                                                                          \
-    struct QUEUE_NAME(__name)                                            \
-        CONCAT(QUEUE_NAME(__name), _new)(struct allocator * allocator);  \
+    struct QUEUE_NAME(__name) CONCAT(QUEUE_NAME(__name), _new)(          \
+        struct allocator allocator[static const 1]                       \
+    );                                                                   \
                                                                          \
     void CONCAT(QUEUE_NAME(__name), _push)(                              \
-        struct QUEUE_NAME(__name) * __name, __type value                 \
+        struct QUEUE_NAME(__name) __name[static const 1], __type value   \
     );                                                                   \
     bool CONCAT(QUEUE_NAME(__name), _is_empty)(struct QUEUE_NAME(__name) \
                                                    __name);              \
-    __type CONCAT(QUEUE_NAME(__name), _pop)(struct QUEUE_NAME(__name) * __name);
+    __type CONCAT(QUEUE_NAME(__name), _pop)(struct QUEUE_NAME(__name)    \
+                                                __name[static const 1]);
 
 #define QUEUE_IMPL(__type, __name)                                            \
-    struct QUEUE_NAME(__name)                                                 \
-        CONCAT(QUEUE_NAME(__name), _new)(struct allocator * allocator) {      \
+    struct QUEUE_NAME(__name) CONCAT(QUEUE_NAME(__name), _new)(               \
+        struct allocator allocator[static const 1]                            \
+    ) {                                                                       \
         usize capacity = 32;                                                  \
         return (struct QUEUE_NAME(__name)){                                   \
             .allocator = allocator,                                           \
@@ -43,7 +46,7 @@
     }                                                                         \
                                                                               \
     void CONCAT(QUEUE_NAME(__name), _push)(                                   \
-        struct QUEUE_NAME(__name) * __name, __type value                      \
+        struct QUEUE_NAME(__name) __name[static const 1], __type value        \
     ) {                                                                       \
         if ((__name)->length == (__name)->capacity) {                         \
             usize old_size = (__name)->capacity * sizeof(__type);             \
@@ -63,9 +66,8 @@
         return (__name).length == 0;                                          \
     }                                                                         \
                                                                               \
-    __type CONCAT(QUEUE_NAME(__name), _pop)(                                  \
-        struct QUEUE_NAME(__name) * __name                                    \
-    ) {                                                                       \
+    __type CONCAT(QUEUE_NAME(__name), _pop)(struct QUEUE_NAME(__name)         \
+                                                __name[static const 1]) {     \
         __type value   = (__name)->data[(__name)->tail];                      \
         (__name)->tail = ((__name)->tail + 1) & ((__name)->capacity - 1);     \
         (__name)->length -= 1;                                                \

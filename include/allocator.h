@@ -5,17 +5,25 @@
 #define DEFAULT_ALIGNMENT (2 * sizeof(void*))
 
 struct allocator {
-    void* (*allocate)(void* context, usize size);
+    void* (*allocate)(void* const context, usize const size);
     void* (*resize)(
-        void* context, void* old_memory, usize old_size, usize new_size
+        void* const context, void* const old_memory, usize const old_size,
+        usize const new_size
     );
-    void (*free)(void* context, void* memory, usize size);
-    void* context;
+    void (*const free)(
+        void* const context, void const* const memory, usize const size
+    );
+    void* const context;
 };
 
-void* allocator_allocate(struct allocator* allocator, usize size);
-void* allocator_resize(
-    struct allocator* allocator, void* old_memory, usize old_size,
-    usize new_size
+void* allocator_allocate(
+    struct allocator allocator[static const 1], usize const size
 );
-void allocator_free(struct allocator* allocator, void* memory, usize size);
+void* allocator_resize(
+    struct allocator allocator[static const 1], void* const old_memory,
+    usize const old_size, usize const new_size
+);
+void allocator_free(
+    struct allocator allocator[static const 1], void const* const memory,
+    usize const size
+);

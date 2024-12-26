@@ -77,13 +77,10 @@ struct string const token_names[]
 };
 
 static noreturn void
-error(
-    struct allocator* allocator, struct location location, char const* format,
-    ...
-) {
+error(struct lexer lexer[static const 1], char const* const format, ...) {
     fprintf(
-        stderr, "%s:%d:%d: syntax error: ", "vix", location.line_number,
-        location.column_number
+        stderr, "%s:%d:%d: syntax error: ", "vix", lexer->location.line_number,
+        lexer->location.column_number
     );
 
     va_list ap;
@@ -92,13 +89,17 @@ error(
     va_end(ap);
 
     fprintf(stderr, "\n");
-    error_line(allocator, location);
+    error_line(lexer->allocator, lexer->location);
     exit(EXIT_LEX);
 }
 
 struct lexer
-lexer_new(struct allocator* allocator, FILE* f, i32 file_id) {
+lexer_new(
+    struct allocator allocator[static const 1], FILE f[static const 1],
+    i32 file_id
+) {
     return (struct lexer){
+        .allocator   = allocator,
         .in          = f,
         .buffer_size = 256,
         .buffer      = allocator_allocate(allocator, 256),
@@ -121,27 +122,27 @@ lexer_new(struct allocator* allocator, FILE* f, i32 file_id) {
 }
 
 static void
-lexer_clear_buffer(struct lexer* lexer) {
+lexer_clear_buffer(struct lexer lexer[static const 1]) {
     lexer->buffer_length = 0;
     lexer->buffer[0]     = 0;
 }
 
 void
-lexer_finish(struct lexer* lexer) {
+lexer_finish(struct lexer lexer[static const 1]) {
     fclose(lexer->in);
 }
 
 static void
 append_buffer(
-    struct allocator* allocator, struct lexer* lexer, struct utf8char utf8_char
+    struct lexer lexer[static const 1], struct utf8char const utf8_char
 ) {
     if (lexer->buffer_length + utf8_char.length >= lexer->buffer_size) {
-        i32 old_buffer_size = lexer->buffer_size;
+        usize const old_buffer_size = lexer->buffer_size;
         do {
             lexer->buffer_size *= 2;
         } while (lexer->buffer_length + utf8_char.length >= lexer->buffer_size);
         lexer->buffer = allocator_resize(
-            allocator, lexer->buffer, old_buffer_size, lexer->buffer_size
+            lexer->allocator, lexer->buffer, old_buffer_size, lexer->buffer_size
         );
     }
     memcpy(
@@ -153,7 +154,9 @@ append_buffer(
 }
 
 static void
-update_line_number(struct location* location, struct codepoint cp) {
+update_line_number(
+    struct location location[static const 1], struct codepoint const cp
+) {
     if (!cp.ok) {
         return;
     }
@@ -169,8 +172,8 @@ update_line_number(struct location* location, struct codepoint cp) {
 
 static struct codepoint
 next(
-    struct allocator* allocator, struct lexer* lexer, struct location* location,
-    bool is_buffer
+    struct lexer lexer[static const 1], struct location location[const 1],
+    bool const is_buffer
 ) {
     struct codepoint character;
     if (lexer->c[0].ok) {
@@ -181,7 +184,7 @@ next(
         character = utf8_get(lexer->in);
         update_line_number(&lexer->location, character);
         if (!character.ok && !feof(lexer->in)) {
-            error(allocator, lexer->location, "Invalid UTF-8 character");
+            error(lexer, "Invalid UTF-8 character");
         }
     }
 
@@ -195,8 +198,8 @@ next(
     if (!character.ok || !is_buffer) {
         return character;
     }
-    struct utf8char encode_result = utf8_encode(character);
-    append_buffer(allocator, lexer, encode_result);
+    struct utf8char const encode_result = utf8_encode(character);
+    append_buffer(lexer, encode_result);
     return character;
 }
 
@@ -214,17 +217,17 @@ is_whitespace(u8 c) {
 
 static struct codepoint
 wgetc(
-    struct allocator* allocator, struct lexer* lexer, struct location* location
+    struct lexer lexer[static const 1], struct location location[static const 1]
 ) {
     struct codepoint cp;
     do {
-        cp = next(allocator, lexer, location, false);
+        cp = next(lexer, location, false);
     } while (cp.ok && is_whitespace(cp.character));
     return cp;
 }
 
 static void
-consume(struct lexer* lexer, usize n) {
+consume(struct lexer lexer[static const 1], usize const n) {
     for (usize i = 0; i < n; i += 1) {
         while ((lexer->buffer[--lexer->buffer_length] & 0xC0) == 0x80)
             ;
@@ -233,7 +236,10 @@ consume(struct lexer* lexer, usize n) {
 }
 
 static void
-push(struct lexer* lexer, u32 character, bool is_buffer) {
+push(
+    struct lexer lexer[static const 1], u32 const character,
+    bool const is_buffer
+) {
     assert(!lexer->c[1].ok);
     lexer->c[1]           = lexer->c[0];
     lexer->c[0].character = character;
@@ -245,9 +251,9 @@ push(struct lexer* lexer, u32 character, bool is_buffer) {
 
 static void
 lex_number(
-    struct allocator* allocator, struct lexer* lexer, struct token* out
+    struct lexer lexer[static const 1], struct token out[static const 1]
 ) {
-    struct codepoint cp = next(allocator, lexer, &out->location, true);
+    struct codepoint cp = next(lexer, &out->location, true);
     u32 character       = cp.character;
     assert(cp.ok && character <= 0x7F && isdigit(character));
 
@@ -260,7 +266,7 @@ lex_number(
         } else {
             break;
         }
-    } while ((cp = next(allocator, lexer, nullptr, true)).ok);
+    } while ((cp = next(lexer, nullptr, true)).ok);
     push(lexer, character, true);
 
     out->integer = strtoumax((char*) lexer->buffer, nullptr, 10);
@@ -270,12 +276,12 @@ lex_number(
 }
 
 static void
-lex_name(struct allocator* allocator, struct lexer* lexer, struct token* out) {
-    struct codepoint cp = next(allocator, lexer, &out->location, true);
+lex_name(struct lexer lexer[static const 1], struct token out[static const 1]) {
+    struct codepoint cp = next(lexer, &out->location, true);
     u32 character       = cp.character;
     assert(cp.ok && character <= 0x7F && isalpha(character));
     while (cp.ok) {
-        cp        = next(allocator, lexer, &out->location, true);
+        cp        = next(lexer, &out->location, true);
         character = cp.character;
         if (character > 0x7F || (!isalnum(character) && character != '_')) {
             push(lexer, character, true);
@@ -285,7 +291,7 @@ lex_name(struct allocator* allocator, struct lexer* lexer, struct token* out) {
 
     out->type = TOKEN_NAME;
     out->name = string_duplicate(
-        allocator,
+        lexer->allocator,
         (struct string){
             .data   = lexer->buffer,
             .length = lexer->buffer_length,
@@ -295,15 +301,14 @@ lex_name(struct allocator* allocator, struct lexer* lexer, struct token* out) {
 }
 
 static struct utf8char
-lex_rune(struct allocator* allocator, struct lexer* lexer) {
-    struct codepoint cp = next(allocator, lexer, nullptr, false);
+lex_rune(struct lexer lexer[static const 1]) {
+    struct codepoint cp = next(lexer, nullptr, false);
     u32 character       = cp.character;
     assert(cp.ok);
 
     switch (character) {
         case '\\': {
-            struct location location = lexer->location;
-            character = next(allocator, lexer, nullptr, false).character;
+            character = next(lexer, nullptr, false).character;
             switch (character) {
                 case '0':
                     return (struct utf8char){
@@ -372,9 +377,7 @@ lex_rune(struct allocator* allocator, struct lexer* lexer) {
                         .ok         = true,
                     };
                 default:
-                    error(
-                        allocator, location, "Invalid escape '\\%c'", character
-                    );
+                    error(lexer, "Invalid escape '\\%c'", character);
             }
             vix_unreachable();
         }
@@ -385,34 +388,34 @@ lex_rune(struct allocator* allocator, struct lexer* lexer) {
 
 static void
 lex_string(
-    struct allocator* allocator, struct lexer* lexer, struct token* out
+    struct lexer lexer[static const 1], struct token out[static const 1]
 ) {
-    struct codepoint cp = next(allocator, lexer, &out->location, true);
+    struct codepoint cp = next(lexer, &out->location, true);
     u32 character       = cp.character;
     u32 delimiter;
 
     switch (character) {
         case '"':
             delimiter = character;
-            cp        = next(allocator, lexer, nullptr, false);
+            cp        = next(lexer, nullptr, false);
             character = cp.character;
             while (character != delimiter) {
                 if (!cp.ok) {
-                    error(allocator, lexer->location, "Unexpected end of file");
+                    error(lexer, "Unexpected end of file");
                 }
                 push(lexer, character, false);
                 if (delimiter == '"') {
-                    struct utf8char utf8 = lex_rune(allocator, lexer);
-                    append_buffer(allocator, lexer, utf8);
+                    struct utf8char utf8 = lex_rune(lexer);
+                    append_buffer(lexer, utf8);
                 } else {
-                    next(allocator, lexer, nullptr, true);
+                    next(lexer, nullptr, true);
                 }
-                cp        = next(allocator, lexer, nullptr, false);
+                cp        = next(lexer, nullptr, false);
                 character = cp.character;
             }
             out->type   = TOKEN_STRING;
             out->string = string_duplicate(
-                allocator,
+                lexer->allocator,
                 (struct string){
                     .data   = lexer->buffer + 1,
                     .length = lexer->buffer_length,
@@ -429,13 +432,13 @@ lex_string(
 }
 
 enum lex_token_type
-lex(struct allocator* allocator, struct lexer* lexer, struct token* out) {
+lex(struct lexer lexer[static const 1], struct token out[static const 1]) {
     if (lexer->un.type != TOKEN_NONE) {
         *out           = lexer->un;
         lexer->un.type = TOKEN_NONE;
         return out->type;
     }
-    struct codepoint cp = wgetc(allocator, lexer, &out->location);
+    struct codepoint cp = wgetc(lexer, &out->location);
     if (!cp.ok) {
         out->type = TOKEN_EOF;
         return out->type;
@@ -444,39 +447,32 @@ lex(struct allocator* allocator, struct lexer* lexer, struct token* out) {
 
     if (character <= 0x7F && isdigit(character)) {
         push(lexer, character, false);
-        lex_number(allocator, lexer, out);
+        lex_number(lexer, out);
         return TOKEN_INTEGER;
     }
 
     if (character <= 0x7F && isalpha(character)) {
         push(lexer, character, false);
-        lex_name(allocator, lexer, out);
+        lex_name(lexer, out);
         return TOKEN_NAME;
     }
 
     switch (character) {
         case '"':
             push(lexer, character, false);
-            lex_string(allocator, lexer, out);
+            lex_string(lexer, out);
             return TOKEN_STRING;
             break;
         case '.':
-            switch (
-                (character = next(allocator, lexer, nullptr, false).character)
-            ) {
+            switch ((character = next(lexer, nullptr, false).character)) {
                 case '.':
-                    switch (
-                        (character
-                         = next(allocator, lexer, nullptr, false).character)
+                    switch ((character = next(lexer, nullptr, false).character)
                     ) {
                         case '.':
                             out->type = TOKEN_DOT;
                             break;
                         default:
-                            error(
-                                allocator, lexer->location,
-                                "Unknown sequence '..'"
-                            );
+                            error(lexer, "Unknown sequence '..'");
                     }
                     break;
                 default:
@@ -510,23 +506,20 @@ lex(struct allocator* allocator, struct lexer* lexer, struct token* out) {
             out->type = TOKEN_SEMICOLON;
             break;
         default:
-            error(
-                allocator, lexer->location, "Unexpected character '%d'",
-                character
-            );
+            error(lexer, "Unexpected character '%d'", character);
     }
 
     return out->type;
 }
 
 void
-unlex(struct lexer* lexer, struct token* out) {
+unlex(struct lexer lexer[static const 1], struct token out[static const 1]) {
     assert(lexer->un.type == TOKEN_NONE);
     lexer->un = *out;
 }
 
 void
-token_finish(struct token* token) {
+token_finish(struct token token[static const 1]) {
     token->type     = TOKEN_NONE;
     token->location = (struct location){};
 }

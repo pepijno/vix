@@ -16,12 +16,15 @@ bool strings_equal(struct string const s1, struct string const s2);
 
 struct allocator;
 
-struct string string_init_empty(struct allocator* allocator, usize size);
+struct string string_init_empty(
+    struct allocator allocator[static const 1], usize size
+);
 struct string string_grow(
-    struct allocator* allocator, struct string string, usize new_size
+    struct allocator allocator[static const 1], struct string string,
+    usize new_size
 );
 struct string string_duplicate(
-    struct allocator* allocator, struct string const string
+    struct allocator allocator[static const 1], struct string const string
 );
 
 u32 fnv1a_s(u32 const hash, struct string const string);

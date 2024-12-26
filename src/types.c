@@ -1,14 +1,11 @@
 #include "types.h"
 
 #include "allocator.h"
-#include "ast.h"
 #include "graph.h"
 #include "hash.h"
-#include "hashmap.h"
 #include "parser.h"
 #include "str.h"
 #include "util.h"
-#include "vector.h"
 
 #include <assert.h>
 
@@ -24,12 +21,12 @@ static u32
 usize_equals(usize const u1, usize const u2) {
     return u1 == u2;
 }
-HASHMAP_IMPL(usize, struct _ast_property*, properties, usize_hash, usize_equals)
+HASHMAP_IMPL(usize, struct ast_property*, properties, usize_hash, usize_equals)
 
 HASHMAP_IMPL(struct string, usize, string_id, string_hash, strings_equal)
 
 static struct string
-new_type_name(struct type_context* context) {
+new_type_name(struct type_context context[static const 1]) {
     auto temp = context->last_id;
 
     usize count = 2;
@@ -53,7 +50,7 @@ new_type_name(struct type_context* context) {
 }
 
 static struct type*
-create_type_var(struct type_context* context) {
+create_type_var(struct type_context context[static const 1]) {
     auto name = new_type_name(context);
     struct type* type
         = allocator_allocate(context->allocator, sizeof(struct type));
@@ -64,11 +61,12 @@ create_type_var(struct type_context* context) {
 
 static struct type*
 resolve(
-    struct type_context* context, struct type* type, struct type** type_var
+    struct type_context context[static const 1], struct type type[static 1],
+    struct type* type_var[static const 1]
 ) {
     *type_var = nullptr;
     while (type->type == TYPE_TYPE_VAR) {
-        auto it = hashmap_string_type_find(&context->types, type->var.name);
+        auto it = hashmap_string_type_find_or_insert_new(&context->types, type->var.name);
 
         if (it == nullptr) {
             *type_var = type;
@@ -82,7 +80,10 @@ resolve(
 }
 
 static void
-bind(struct type_context* context, struct string name, struct type* type) {
+bind(
+    struct type_context context[static const 1], struct string const name,
+    struct type type[static const 1]
+) {
     if (type->type == TYPE_TYPE_VAR && strings_equal(type->var.name, name)) {
         return;
     }
@@ -90,7 +91,10 @@ bind(struct type_context* context, struct string name, struct type* type) {
 }
 
 static void
-unify(struct type_context* context, struct type* left, struct type* right) {
+unify(
+    struct type_context context[static const 1], struct type left[static 1],
+    struct type right[static 1]
+) {
     struct type* lvar;
     struct type* rvar;
 
@@ -118,8 +122,10 @@ unify(struct type_context* context, struct type* left, struct type* right) {
 }
 
 static struct type*
-type_env_lookup(struct type_env* type_env, struct string name) {
-    auto it = hashmap_string_type_find(&type_env->names, name);
+type_env_lookup(
+    struct type_env type_env[static const 1], struct string const name
+) {
+    auto it = hashmap_string_type_find_or_insert_new(&type_env->names, name);
     if (it != nullptr) {
         return it;
     } else if (type_env->parent != nullptr) {
@@ -130,12 +136,15 @@ type_env_lookup(struct type_env* type_env, struct string name) {
 }
 
 void
-env_bind(struct type_env* type_env, struct string name, struct type* type) {
+env_bind(
+    struct type_env type_env[static const 1], struct string const name,
+    struct type type[static const 1]
+) {
     hashmap_string_type_add(&type_env->names, name, type);
 }
 
 static struct type_env*
-new_scope(struct type_env* type_env) {
+new_scope(struct type_env type_env[static const 1]) {
     struct type_env* new_env
         = allocator_allocate(type_env->allocator, sizeof(struct type_env));
     new_env->allocator = type_env->allocator;
@@ -146,8 +155,9 @@ new_scope(struct type_env* type_env) {
 
 void
 typecheck_properties_first(
-    struct type_context* context, struct type_env* env, struct string name,
-    struct _ast_element* element
+    struct type_context context[static const 1],
+    struct type_env env[static const 1], struct string const name,
+    struct ast_element element[static const 1]
 ) {
     assert(element->type == AST_ELEMENT_TYPE_PROPERTIES);
     struct type* type
@@ -171,8 +181,9 @@ typecheck_properties_first(
 
 void
 typecheck_properties_second(
-    struct type_context* context, struct type_env* env,
-    struct _ast_element* element
+    struct type_context context[static const 1],
+    struct type_env env[static const 1],
+    struct ast_element element[static const 1]
 ) {
     assert(element->type == AST_ELEMENT_TYPE_PROPERTIES);
     auto new_env = new_scope(env);
@@ -189,8 +200,9 @@ typecheck_properties_second(
 
 struct type*
 typecheck(
-    struct type_context* context, struct type_env* env,
-    struct _ast_element* element
+    struct type_context context[static const 1],
+    struct type_env env[static const 1],
+    struct ast_element element[static const 1]
 ) {
     switch (element->type) {
         case AST_ELEMENT_TYPE_INTEGER: {
@@ -216,7 +228,7 @@ typecheck(
 }
 
 static struct typecheck_env
-new_typecheck_env(struct typecheck_env* parent) {
+new_typecheck_env(struct typecheck_env parent[static const 1]) {
     return (struct typecheck_env){
         .parent = parent,
         .names  = hashmap_string_id_new(parent->names.allocator),
@@ -225,8 +237,9 @@ new_typecheck_env(struct typecheck_env* parent) {
 
 static usize
 typecheck_env_find(struct typecheck_env env, struct string const name) {
-    if (hashmap_string_id_contains(env.names, name)) {
-        return hashmap_string_id_find(&env.names, name);
+    auto search_result = hashmap_string_id_find(env.names, name);
+    if (search_result.found) {
+        return search_result.value;
     } else {
         return typecheck_env_find(*env.parent, name);
     }
@@ -234,8 +247,10 @@ typecheck_env_find(struct typecheck_env env, struct string const name) {
 
 void
 typecheck_init_properties(
-    struct allocator* allocator, struct object_graph* object_graph,
-    struct vector_ast_property_ptr properties, struct typecheck_env* env
+    struct allocator allocator[static const 1],
+    struct object_graph object_graph[static const 1],
+    struct vector_ast_property_ptr const properties,
+    struct typecheck_env env[static const 1]
 ) {
     auto new_env = new_typecheck_env(env);
     vector_foreach(properties, prop) {

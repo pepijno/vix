@@ -30,7 +30,9 @@ strings_equal(struct string const s1, struct string const s2) {
 }
 
 struct string
-string_init_empty(struct allocator* allocator, usize const size) {
+string_init_empty(
+    struct allocator allocator[static const 1], usize const size
+) {
     return (struct string){
         .data   = allocator_allocate(allocator, size * sizeof(char)),
         .length = size,
@@ -39,7 +41,7 @@ string_init_empty(struct allocator* allocator, usize const size) {
 
 struct string
 string_grow(
-    struct allocator* allocator, struct string const string,
+    struct allocator allocator[static const 1], struct string const string,
     usize const new_size
 ) {
     struct string new_string = string_init_empty(allocator, new_size);
@@ -48,7 +50,9 @@ string_grow(
 }
 
 struct string
-string_duplicate(struct allocator* allocator, struct string const string) {
+string_duplicate(
+    struct allocator allocator[static const 1], struct string const string
+) {
     char* buffer = allocator_allocate(allocator, string.length);
     memcpy(buffer, string.data, string.length);
     return (struct string){
@@ -67,6 +71,6 @@ fnv1a_s(u32 const hash, struct string const string) {
 }
 
 u32
-string_hash(struct string string) {
+string_hash(struct string const string) {
     return fnv1a_s(HASH_INIT, string);
 }

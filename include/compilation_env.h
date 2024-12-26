@@ -25,5 +25,9 @@ struct compilation_env {
     };
 };
 
-bool has_variable(struct compilation_env compilation_env, struct string name);
-usize get_offset(struct compilation_env compilation_env, struct string name);
+bool has_variable(
+    struct compilation_env const compilation_env, struct string const name
+);
+usize get_offset(
+    struct compilation_env const compilation_env, struct string const name
+);

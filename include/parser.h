@@ -1,12 +1,12 @@
 #pragma once
 
 #include "hashmap.h"
+#include "lexer.h"
 
 struct allocator;
-struct lexer;
-struct _ast_element;
+struct ast_element;
 
-HASHMAP_DEFS(usize, struct _ast_property*, properties)
+HASHMAP_DEFS(usize, struct ast_property*, properties)
 
 struct parser_context {
     struct allocator* allocator;
@@ -14,6 +14,7 @@ struct parser_context {
     struct hashmap_properties properties;
 };
 
-struct _ast_element* _parse(
-    struct parser_context* parser_context, struct lexer* lexer
+struct ast_element* parse(
+    struct parser_context parser_context[static const 1],
+    struct lexer lexer[static const 1]
 );

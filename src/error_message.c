@@ -26,7 +26,7 @@ enum term_color {
 #define VT_RESET "\x1b[0m"
 
 static void
-set_color_posix(enum term_color color) {
+set_color_posix(enum term_color const color) {
     switch (color) {
         case TERM_COLOR_RED:
             fprintf(stderr, VT_RED);
@@ -48,19 +48,19 @@ set_color_posix(enum term_color color) {
 
 static void
 print_error_message_type(
-    struct error_message* error_message, enum error_color color,
-    enum error_type error_type
+    struct error_message error_message[static const 1],
+    enum error_color const color, enum error_type const error_type
 ) {
     struct string path = error_message->path;
-    i32 line           = error_message->line_start + 1;
-    i32 col            = error_message->column_start + 1;
+    usize line         = error_message->line_start + 1;
+    usize col          = error_message->column_start + 1;
     struct string text = error_message->message;
 
     bool is_tty = isatty(STDERR_FILENO) != 0;
     if (color == ERROR_COLOR_ON || (color == ERROR_COLOR_AUTO && is_tty)) {
         if (error_type == ERROR_TYPE_ERROR) {
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, STR_FMT ":%d:%d: ", STR_ARG(path), line, col);
+            fprintf(stderr, STR_FMT ":%lu:%lu: ", STR_ARG(path), line, col);
             set_color_posix(TERM_COLOR_RED);
             fprintf(stderr, "error: ");
             set_color_posix(TERM_COLOR_WHITE);
@@ -69,7 +69,7 @@ print_error_message_type(
             fprintf(stderr, "\n");
         } else if (error_type == ERROR_TYPE_NOTE) {
             set_color_posix(TERM_COLOR_WHITE);
-            fprintf(stderr, STR_FMT ":%d:%d: ", STR_ARG(path), line, col);
+            fprintf(stderr, STR_FMT ":%lu:%lu: ", STR_ARG(path), line, col);
             set_color_posix(TERM_COLOR_CYAN);
             fprintf(stderr, "note: ");
             set_color_posix(TERM_COLOR_WHITE);
@@ -81,7 +81,7 @@ print_error_message_type(
         }
 
         fprintf(stderr, STR_FMT "\n", STR_ARG(error_message->line_buffer));
-        for (i64 i = 0; i < error_message->column_start; ++i) {
+        for (usize i = 0; i < error_message->column_start; i += 1) {
             fprintf(stderr, " ");
         }
         set_color_posix(TERM_COLOR_GREEN);
@@ -91,12 +91,12 @@ print_error_message_type(
     } else {
         if (error_type == ERROR_TYPE_ERROR) {
             fprintf(
-                stderr, STR_FMT ":%d:%d: error: " STR_FMT "\n", STR_ARG(path),
+                stderr, STR_FMT ":%lu:%lu: error: " STR_FMT "\n", STR_ARG(path),
                 line, col, STR_ARG(text)
             );
         } else if (error_type == ERROR_TYPE_NOTE) {
             fprintf(
-                stderr, STR_FMT ":%d:%d: note: " STR_FMT "\n", STR_ARG(path),
+                stderr, STR_FMT ":%lu:%lu: note: " STR_FMT "\n", STR_ARG(path),
                 line, col, STR_ARG(text)
             );
         } else {
@@ -113,14 +113,16 @@ print_error_message_type(
 
 void
 print_error_message(
-    struct error_message* error_message, enum error_color color
+    struct error_message error_message[static const 1],
+    enum error_color const color
 ) {
     print_error_message_type(error_message, color, ERROR_TYPE_ERROR);
 }
 
 void
 error_message_add_note(
-    struct error_message* parent, struct error_message* note
+    struct error_message parent[static const 1],
+    struct error_message note[static const 1]
 ) {
     struct error_message** next = &parent->next;
     while (next) {
@@ -131,8 +133,9 @@ error_message_add_note(
 
 struct error_message
 error_message_create_with_line(
-    struct string path, i32 line, i32 column, struct string source,
-    i32* line_offsets, struct string message
+    struct string const path, usize const line, usize const column,
+    struct string const source, usize* const line_offsets,
+    struct string const message
 ) {
     (void) source;
     (void) line_offsets;

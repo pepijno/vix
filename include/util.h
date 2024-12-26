@@ -1,5 +1,6 @@
 #pragma once
 
+#include "allocator.h"
 #include "defs.h"
 
 #include <execinfo.h>
@@ -16,7 +17,7 @@ enum exit_status {
     EXIT_ABNORMAL = 255
 };
 
-noreturn void vix_panic(struct string format, ...);
+noreturn void vix_panic(struct string const format, ...);
 
 noreturn void vix_unreachable(void);
 
@@ -26,9 +27,10 @@ struct location {
     i32 column_number;
 };
 
-struct allocator;
-
-void error_line(struct allocator* allocator, struct location location);
+void error_line(
+    struct allocator allocator[static const 1], struct location const location
+);
 struct string generate_name(
-    struct allocator* allocator, u32 const id, struct string const format
+    struct allocator allocator[static const 1], u32 const id,
+    struct string const format
 );
