@@ -97,7 +97,7 @@ main(i32 argc, char* argv[]) {
 
     hashmap_foreach(env.names, type) {
         printf(STR_FMT ": ", STR_ARG(type.key));
-        print_type(context, *type.value, 0);
+        print_type(context, type.value, 0);
     }
 
     struct compilation_env compilation_env = {

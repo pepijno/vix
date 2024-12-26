@@ -8,6 +8,7 @@
 #include <stdnoreturn.h>
 
 VECTOR_IMPL(struct ast_property*, ast_property_ptr)
+VECTOR_IMPL(struct string, string)
 
 static noreturn void
 vsynerror(
@@ -90,11 +91,33 @@ parse_element(
     );
 
     switch (lex(lexer, &token)) {
-        case TOKEN_NAME:
-            element->type = AST_ELEMENT_TYPE_ID;
-            element->id.id
-                = string_duplicate(parser_context->allocator, token.name);
+        case TOKEN_NAME: {
+            element->type = AST_ELEMENT_TYPE_PROPERTY_ACCESS;
+            element->property_access.ids
+                = vector_string_new(parser_context->allocator);
+            vector_string_add(
+                &element->property_access.ids,
+                string_duplicate(parser_context->allocator, token.name)
+            );
+            struct token token2 = {};
+            bool break_out      = false;
+            while (!break_out) {
+                switch (lex(lexer, &token2)) {
+                    case TOKEN_DOT:
+                        expect_token(lexer, TOKEN_NAME, &token2);
+                        vector_string_add(
+                            &element->property_access.ids,
+                            string_duplicate(parser_context->allocator, token2.name)
+                        );
+                        break;
+                    default:
+                        unlex(lexer, &token2);
+                        break_out = true;
+                        break;
+                }
+            }
             break;
+        }
         case TOKEN_OPEN_BRACE:
             struct token token2 = {};
             bool break_out      = false;

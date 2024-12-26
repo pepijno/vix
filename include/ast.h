@@ -4,11 +4,9 @@
 #include "str.h"
 #include "vector.h"
 
-struct ast_element;
+VECTOR_DEFS(struct string, string)
 
-struct ast_id {
-    struct string id;
-};
+struct ast_element;
 
 struct ast_integer {
     u64 value;
@@ -16,6 +14,10 @@ struct ast_integer {
 
 struct ast_string {
     struct string value;
+};
+
+struct ast_property_access {
+    struct vector_string ids;
 };
 
 struct type;
@@ -32,17 +34,17 @@ VECTOR_DEFS(struct ast_property*, ast_property_ptr)
 enum ast_element_type {
     AST_ELEMENT_TYPE_INTEGER,
     AST_ELEMENT_TYPE_STRING,
-    AST_ELEMENT_TYPE_ID,
     AST_ELEMENT_TYPE_PROPERTIES,
+    AST_ELEMENT_TYPE_PROPERTY_ACCESS,
 };
 
 struct ast_element {
     enum ast_element_type type;
     struct type_env* env;
     union {
-        struct ast_id id;
         struct ast_integer integer;
         struct ast_string string;
+        struct ast_property_access property_access;
         struct vector_ast_property_ptr properties;
     };
 };

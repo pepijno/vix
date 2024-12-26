@@ -28,10 +28,6 @@ print_property(struct ast_property const property, usize const indent) {
 void
 print_element(struct ast_element const element, usize const indent) {
     switch (element.type) {
-        case AST_ELEMENT_TYPE_ID:
-            print_indent(indent);
-            printf("ID: " STR_FMT "\n", STR_ARG(element.id.id));
-            break;
         case AST_ELEMENT_TYPE_STRING:
             print_indent(indent);
             printf("STRING: " STR_FMT "\n", STR_ARG(element.string.value));
@@ -47,42 +43,51 @@ print_element(struct ast_element const element, usize const indent) {
                 print_property(*prop, indent + 1);
             }
             break;
+        case AST_ELEMENT_TYPE_PROPERTY_ACCESS:
+            print_indent(indent);
+            printf("PROPERTY ACCESS: \n");
+            print_indent(indent + 1);
+            vector_foreach(element.property_access.ids, prop) {
+                printf(STR_FMT", ", STR_ARG(prop));
+            }
+            printf("\n");
+            break;
     }
 }
 
 void
 print_type(
-    struct type_context const context, struct type const type,
+    struct type_context const context, struct type const* const type,
     usize const indent
 ) {
-    switch (type.type) {
+    switch (type->type) {
         case TYPE_TYPE_VAR:
-            auto search_result = hashmap_string_type_find(context.types, type.var.name);
+            auto search_result = hashmap_string_type_find(context.types, type->var.name);
             if (search_result.found) {
-                print_type(context, *search_result.value, indent);
+                print_type(context, search_result.value, indent);
             } else {
                 print_indent(indent);
-                printf("VAR " STR_FMT "\n", STR_ARG(type.var.name));
+                printf("VAR " STR_FMT "\n", STR_ARG(type->var.name));
             }
             break;
         case TYPE_TYPE_BASE:
             print_indent(indent);
-            printf(STR_FMT "\n", STR_ARG(type.base.name));
+            printf(STR_FMT "\n", STR_ARG(type->base.name));
             break;
         case TYPE_TYPE_ARROW:
             print_indent(indent);
-            print_type(context, *type.arrow.left, indent);
+            print_type(context, type->arrow.left, indent);
             printf(" -> (");
-            print_type(context, *type.arrow.right, indent);
+            print_type(context, type->arrow.right, indent);
             printf(")\n");
             break;
         case TYPE_TYPE_PROPERTIES:
             print_indent(indent);
             printf("{\n");
-            vector_foreach(type.properties, prop) {
+            vector_foreach(type->properties, prop) {
                 print_indent(indent + 1);
                 printf(STR_FMT ":\n", STR_ARG(prop->name));
-                print_type(context, *prop->type, indent + 2);
+                print_type(context, prop->type, indent + 2);
             }
             print_indent(indent);
             printf("}\n");

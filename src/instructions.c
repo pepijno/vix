@@ -38,30 +38,30 @@ compile(
                 })
             );
             break;
-        case AST_ELEMENT_TYPE_ID:
-            if (has_variable(compilation_env, element.id.id)) {
-                vector_instruction_add(
-                    instructions,
-                    ((struct instruction){
-                        .type = INSTRUCTION_TYPE_PUSH,
-                        .push = ((struct instruction_push){
-                            .offset
-                            = get_offset(compilation_env, element.id.id),
-                        }),
-                    })
-                );
-            } else {
-                vector_instruction_add(
-                    instructions,
-                    ((struct instruction){
-                        .type        = INSTRUCTION_TYPE_PUSH_GLOBAL,
-                        .push_global = ((struct instruction_push_global){
-                            .name = string_duplicate(allocator, element.id.id),
-                        }),
-                    })
-                );
-            }
-            break;
+        // case AST_ELEMENT_TYPE_ID:
+        //     if (has_variable(compilation_env, element.id.id)) {
+        //         vector_instruction_add(
+        //             instructions,
+        //             ((struct instruction){
+        //                 .type = INSTRUCTION_TYPE_PUSH,
+        //                 .push = ((struct instruction_push){
+        //                     .offset
+        //                     = get_offset(compilation_env, element.id.id),
+        //                 }),
+        //             })
+        //         );
+        //     } else {
+        //         vector_instruction_add(
+        //             instructions,
+        //             ((struct instruction){
+        //                 .type        = INSTRUCTION_TYPE_PUSH_GLOBAL,
+        //                 .push_global = ((struct instruction_push_global){
+        //                     .name = string_duplicate(allocator, element.id.id),
+        //                 }),
+        //             })
+        //         );
+        //     }
+        //     break;
         case AST_ELEMENT_TYPE_PROPERTIES:
             usize size = 0;
             vector_foreach(element.properties, prop) {

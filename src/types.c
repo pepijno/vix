@@ -6,8 +6,10 @@
 #include "parser.h"
 #include "str.h"
 #include "util.h"
+#include "vector.h"
 
 #include <assert.h>
+#include <stdio.h>
 
 VECTOR_IMPL(struct type_property*, type_property_ptr)
 HASHMAP_IMPL(
@@ -219,8 +221,26 @@ typecheck(
             type->base.name = from_cstr("Str");
             return type;
         }
-        case AST_ELEMENT_TYPE_ID:
-            return type_env_lookup(env, element->id.id);
+        case AST_ELEMENT_TYPE_PROPERTY_ACCESS:
+            struct type* type = nullptr;
+            vector_foreach(element->property_access.ids, id) {
+                if (type == nullptr) {
+                    type = type_env_lookup(env, id);
+                } else {
+                    vector_foreach(type->properties, prop) {
+                        if (strings_equal(prop->name, id)) {
+                            type = prop->type;
+                            break;
+                        }
+                    }
+                    if (type->type == TYPE_TYPE_VAR) {
+                        auto search_result = hashmap_string_type_find(context->types, type->var.name);
+                        assert(search_result.found);
+                        type = search_result.value;
+                    }
+                }
+            }
+            return type;
         case AST_ELEMENT_TYPE_PROPERTIES:
             return nullptr;
     }
@@ -261,16 +281,13 @@ typecheck_init_properties(
         graph_add_function(allocator, object_graph, prop->id);
         if (prop->value->type == AST_ELEMENT_TYPE_PROPERTIES) {
             vector_foreach(prop->value->properties, p) {
-                if (p->value->type == AST_ELEMENT_TYPE_PROPERTIES
-                    || p->value->type == AST_ELEMENT_TYPE_ID) {
-                    graph_add_edge(allocator, object_graph, p->id, prop->id);
-                }
+                graph_add_edge(allocator, object_graph, p->id, prop->id);
             }
             typecheck_init_properties(
                 allocator, object_graph, prop->value->properties, &new_env
             );
-        } else if (prop->value->type == AST_ELEMENT_TYPE_ID) {
-            auto name = prop->value->id.id;
+        } else if (prop->value->type == AST_ELEMENT_TYPE_PROPERTY_ACCESS) {
+            auto name = vector_string_head(prop->value->property_access.ids);
             auto id   = typecheck_env_find(new_env, name);
             graph_add_edge(allocator, object_graph, id, prop->id);
         }

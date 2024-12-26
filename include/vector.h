@@ -24,7 +24,10 @@
                                                                          \
     void CONCAT(VECTOR_NAME(__name), _clear)(                            \
         struct VECTOR_NAME(__name) * __name                              \
-    );
+    );                                                                   \
+                                                                         \
+    __type CONCAT(VECTOR_NAME(__name), _head)(struct VECTOR_NAME(__name) \
+                                                  const __name);
 
 #define VECTOR_IMPL(__type, __name)                                       \
     struct VECTOR_NAME(__name)                                            \
@@ -59,6 +62,11 @@
         struct VECTOR_NAME(__name) * __name                               \
     ) {                                                                   \
         (__name)->length = 0;                                             \
+    }                                                                     \
+                                                                          \
+    __type CONCAT(VECTOR_NAME(__name), _head)(struct VECTOR_NAME(__name)  \
+                                                  const __name) {         \
+        return (__name).data[0];                                          \
     }
 
 #define vector_foreach(__vector, __name)                             \

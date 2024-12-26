@@ -2,11 +2,19 @@ a = {
 	x = c;
 	y = b;
 	z = {
-		xx = x;
-		yy = xx;
+		xx = d.e;
+		yy = xx.x;
 	};
 };
 
 b = 3;
 
 c = "bla";
+
+d = {
+	e = {
+		x = "bla2";
+		y = 3;
+	};
+	f = 4;
+};

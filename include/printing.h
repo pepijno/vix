@@ -6,7 +6,7 @@
 
 void print_element(struct ast_element const element, usize const indent);
 void print_type(
-    struct type_context const context, struct type const type,
+    struct type_context const context, struct type const* const type,
     usize const indent
 );
 void print_instruction(
