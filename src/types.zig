@@ -20,7 +20,7 @@ pub const TypecheckEnv = struct {
         };
     }
 
-    pub fn addName(self: *@This(), name: []const u8, id: usize) std.mem.Allocator.Error!void {
+    pub fn addName(self: *@This(), name: []const u8, id: usize) anyerror!void {
         try self.names.put(name, id);
     }
 

@@ -19,9 +19,7 @@ pub const Location = struct {
     line_number: u32,
     column_number: u32,
 
-    pub const ErrorLineError = (std.fmt.AllocPrintError || std.fs.File.OpenError || std.fs.File.WriteError);
-
-    pub fn errorLine(self: @This(), allocator: std.mem.Allocator) ErrorLineError!void {
+    pub fn errorLine(self: @This(), allocator: std.mem.Allocator) anyerror!void {
         const path = sources.items[self.file];
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
@@ -29,7 +27,6 @@ pub const Location = struct {
         const reader = file.reader();
 
         var line = std.ArrayList(u8).init(allocator);
-        defer line.deinit();
         const writer = line.writer();
 
         const stderr = std.io.getStdErr().writer();

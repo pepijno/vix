@@ -81,16 +81,12 @@ pub const Lexer = struct {
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.allocator.free(self.buffer);
-    }
-
     pub fn unlex(self: *@This(), out: *Token) void {
         std.debug.assert(self.un.type == .none);
         self.un = out.*;
     }
 
-    pub fn lex(self: *@This(), out: *Token) (std.mem.Allocator.Error || util.Location.ErrorLineError || std.fs.File.WriteError)!LexTokenType {
+    pub fn lex(self: *@This(), out: *Token) anyerror!LexTokenType {
         if (self.un.type != .none) {
             out.* = self.un;
             self.un.type = .none;
@@ -115,7 +111,7 @@ pub const Lexer = struct {
         }
 
         switch (character) {
-            '"' => {
+            '<' => {
                 self.push(character, false);
                 try self.lexString(out);
                 return .string;
@@ -167,7 +163,7 @@ pub const Lexer = struct {
         self.buffer_length += utf8char.len;
     }
 
-    fn printError(self: *@This(), comptime format: []const u8, args: anytype) (util.Location.ErrorLineError || std.fs.File.WriteError)!noreturn {
+    fn printError(self: *@This(), comptime format: []const u8, args: anytype) anyerror!noreturn {
         const stderr = std.io.getStdErr().writer();
         _ = try stderr.print("{s}:{}:{}: syntax error: ", .{ "vix", self.location.line_number, self.location.column_number });
         _ = try stderr.print(format, args);
@@ -280,7 +276,7 @@ pub const Lexer = struct {
         self.clearBuffer();
     }
 
-    fn lexName(self: *@This(), out: *Token) std.mem.Allocator.Error!void {
+    fn lexName(self: *@This(), out: *Token) anyerror!void {
         var cp = self.next(&out.location, true);
         std.debug.assert(cp != null);
         var character = cp.?;
@@ -303,7 +299,7 @@ pub const Lexer = struct {
         self.clearBuffer();
     }
 
-    fn lexRune(self: *@This()) (util.Location.ErrorLineError || std.fs.File.WriteError)![]const u8 {
+    fn lexRune(self: *@This()) anyerror![]const u8 {
         const cp = self.next(null, false);
         std.debug.assert(cp != null);
         var character = cp.?;
@@ -345,12 +341,6 @@ pub const Lexer = struct {
                     '\\' => {
                         return "\\";
                     },
-                    '\'' => {
-                        return "\'";
-                    },
-                    '"' => {
-                        return "\"";
-                    },
                     else => try self.printError("Invalid escape '\\{}'", .{character}),
                 }
                 util.vixUnreachable(@src());
@@ -363,28 +353,30 @@ pub const Lexer = struct {
         }
     }
 
-    fn lexString(self: *@This(), out: *Token) (std.mem.Allocator.Error || util.Location.ErrorLineError || std.fs.File.WriteError)!void {
+    fn lexString(self: *@This(), out: *Token) anyerror!void {
         var cp = self.next(&out.location, true);
         std.debug.assert(cp != null);
         var character = cp.?;
-        var delimiter: u32 = 0;
 
         switch (character) {
-            '"' => {
-                delimiter = character;
+            '<' => {
+                var count: usize = 1;
                 cp = self.next(null, false);
                 character = cp.?;
-                while (character != delimiter) {
+                while (true) {
                     if (cp == null) {
                         try self.printError("Unexpected end of file", .{});
                     }
-                    self.push(character, false);
-                    if (delimiter == '"') {
-                        const utf8Char = try self.lexRune();
-                        self.appendToBuffer(utf8Char);
-                    } else {
-                        _ = self.next(null, true);
+                    if (character == '<') {
+                        count += 1;
+                    } else if (character == '>' and count == 1) {
+                        break;
+                    } else if (character == '>') {
+                        count -= 1;
                     }
+                    self.push(character, false);
+                    const utf8Char = try self.lexRune();
+                    self.appendToBuffer(utf8Char);
                     cp = self.next(null, false);
                     character = cp.?;
                 }

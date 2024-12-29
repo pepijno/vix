@@ -20,17 +20,17 @@ pub fn printToken(token: Token, writer: anytype) !void {
     try writer.print("\n", .{});
 }
 
-fn printIndent(indent: usize, writer: anytype) std.fs.File.WriteError!void {
+fn printIndent(indent: usize, writer: anytype) anyerror!void {
     try writer.print("{[s]s: >[size]}", .{ .s = "", .size = 2 * indent });
 }
 
-fn printProperty(property: AstProperty, indent: usize, writer: anytype) std.fs.File.WriteError!void {
+fn printProperty(property: AstProperty, indent: usize, writer: anytype) anyerror!void {
     try printIndent(indent, writer);
     try writer.print("PROPERTY {}: {s}\n", .{ property.id, property.name });
     try printElement(property.value.*, indent + 1, writer);
 }
 
-pub fn printElement(element: AstElement, indent: usize, writer: anytype) std.fs.File.WriteError!void {
+pub fn printElement(element: AstElement, indent: usize, writer: anytype) anyerror!void {
     switch (element.value) {
         .integer => |int| {
             try printIndent(indent, writer);
@@ -59,7 +59,7 @@ pub fn printElement(element: AstElement, indent: usize, writer: anytype) std.fs.
     }
 }
 
-pub fn printType(context: TypeContext, t: Type, indent: usize, writer: anytype) std.fs.File.WriteError!void {
+pub fn printType(context: TypeContext, t: Type, indent: usize, writer: anytype) anyerror!void {
     switch (t.value) {
         .base => |b| {
             try printIndent(indent, writer);

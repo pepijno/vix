@@ -22,12 +22,11 @@ pub fn main() !void {
     var stdout_bw = std.io.bufferedWriter(stdout_file);
     const stdout = stdout_bw.writer();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer gpa.deinit();
-    const allocator = gpa.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
     const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
 
     if (args.len < 2) {
         try stderr.print("Please provide a *.vix file to compile\n", .{});
@@ -39,6 +38,7 @@ pub fn main() !void {
     defer file.close();
     const content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     var lexer = try Lexer.init(allocator, content, 0);
+
     util.sources = std.ArrayList([]const u8).init(allocator);
     try util.sources.append(args[1]);
 
@@ -46,10 +46,7 @@ pub fn main() !void {
     const root = try parser.parse();
     try printing.printElement(root.*, 0, stdout);
 
-    try stdout_bw.flush();
-
     var obj_graph = graph.ObjectGraph.init(allocator);
-    defer obj_graph.deinit();
 
     var typecheck_env = TypecheckEnv.init(allocator, null);
     try obj_graph.initProperties(root.value.properties, &typecheck_env);

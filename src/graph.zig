@@ -18,10 +18,12 @@ const GroupData = struct {
     indegree: usize,
 
     fn init(allocator: std.mem.Allocator) !*GroupData {
-        var group_data = try allocator.create(GroupData);
-        group_data.functions = std.AutoHashMap(usize, void).init(allocator);
-        group_data.adjacency_list = std.AutoHashMap(usize, void).init(allocator);
-        group_data.indegree = 0;
+        const group_data = try allocator.create(GroupData);
+        group_data.* = .{
+            .functions = std.AutoHashMap(usize, void).init(allocator),
+            .adjacency_list = std.AutoHashMap(usize, void).init(allocator),
+            .indegree = 0,
+        };
         return group_data;
     }
 };
@@ -37,15 +39,6 @@ pub const ObjectGraph = struct {
             .adjacency_list = std.AutoHashMap(usize, std.AutoHashMap(usize, void)).init(allocator),
             .edges = std.AutoHashMap(Edge, void).init(allocator),
         };
-    }
-
-    pub fn deinit(self: *@This()) void {
-        var it = self.adjacency_list.valueIterator();
-        while (it.next()) |value| {
-            value.*.deinit();
-        }
-        self.adjacency_list.deinit();
-        self.edges.deinit();
     }
 
     pub fn addFunction(self: *@This(), from: usize) !*std.AutoHashMap(usize, void) {

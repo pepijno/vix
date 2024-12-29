@@ -9,8 +9,9 @@ const LexTokenType = lex.LexTokenType;
 const Token = lex.Token;
 const util = @import("util.zig");
 const Location = util.Location;
+const Type = @import("types.zig").Type;
 
-fn vsynerror(allocator: std.mem.Allocator, token: Token, args: std.ArrayList(LexTokenType)) (std.fs.File.WriteError || Location.ErrorLineError)!noreturn {
+fn vsynerror(allocator: std.mem.Allocator, token: Token, args: std.ArrayList(LexTokenType)) anyerror!noreturn {
     const stderr = std.io.getStdErr().writer();
 
     try stderr.print("{s}:{}:{}: syntax error: expected ", .{
@@ -30,7 +31,7 @@ fn vsynerror(allocator: std.mem.Allocator, token: Token, args: std.ArrayList(Lex
     std.process.exit(1);
 }
 
-fn synassert(allocator: std.mem.Allocator, token: Token, condition: bool, args: std.ArrayList(LexTokenType)) (std.fs.File.WriteError || Location.ErrorLineError)!void {
+fn synassert(allocator: std.mem.Allocator, token: Token, condition: bool, args: std.ArrayList(LexTokenType)) anyerror!void {
     if (!condition) {
         try vsynerror(allocator, token, args);
     }
@@ -95,9 +96,12 @@ pub const Parser = struct {
         return property;
     }
 
-    fn parseElement(self: *@This()) (std.mem.Allocator.Error || std.fs.File.WriteError || Location.ErrorLineError)!*AstElement {
+    fn parseElement(self: *@This()) anyerror!*AstElement {
         var token = Token.initEmpty();
-        const element = try self.allocator.create(AstElement);
+        var element = try self.allocator.create(AstElement);
+        element.value = .{
+            .integer = 0,
+        };
 
         const token_type = try self.lexer.lex(&token);
         switch (token_type) {
@@ -124,11 +128,11 @@ pub const Parser = struct {
                 }
             },
             .open_brace => {
-                var token2 = Token.initEmpty();
                 element.value = .{
                     .properties = std.ArrayList(*AstProperty).init(self.allocator),
                 };
                 loop: while (true) {
+                    var token2 = Token.initEmpty();
                     const token_type2 = try self.lexer.lex(&token2);
                     switch (token_type2) {
                         .close_brace => {
@@ -160,13 +164,12 @@ pub const Parser = struct {
         return element;
     }
 
-    fn expectToken(self: *@This(), token_type: LexTokenType, token: ?*Token) (std.mem.Allocator.Error || std.fs.File.WriteError || Location.ErrorLineError)!void {
+    fn expectToken(self: *@This(), token_type: LexTokenType, token: ?*Token) anyerror!void {
         var emptyToken = Token.initEmpty();
         var out: *Token = if (token) |t| t else &emptyToken;
         _ = try self.lexer.lex(out);
 
         var tokens = std.ArrayList(LexTokenType).init(self.allocator);
-        defer tokens.deinit();
         try tokens.append(token_type);
 
         try synassert(self.allocator, out.*, out.type == token_type, tokens);
