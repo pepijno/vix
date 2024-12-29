@@ -12,17 +12,14 @@
         pkgs = nixpkgs.legacyPackages."${system}";
 
         buildInputs = with pkgs; [
-          gnumake
-          clang-tools
           valgrind
           nasm
           asm-lsp
           asmfmt
           qbe
-          bear
           gdb
-          glibc
-          glibc.static
+          zig
+          zls
         ];
       in
       rec {
