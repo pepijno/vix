@@ -52,8 +52,7 @@ pub const Token = struct {
 pub const Lexer = struct {
     allocator: std.mem.Allocator,
     source_iterator: std.unicode.Utf8Iterator,
-    buffer: []u8,
-    buffer_length: usize,
+    buffer: std.ArrayList(u8),
     c: [2]?u21,
     un: Token,
     location: Location,
@@ -63,8 +62,7 @@ pub const Lexer = struct {
         return .{
             .allocator = allocator,
             .source_iterator = view.iterator(),
-            .buffer = try allocator.alloc(u8, 256),
-            .buffer_length = 0,
+            .buffer = std.ArrayList(u8).init(allocator),
             .un = .{
                 .location = std.mem.zeroInit(Location, .{}),
                 .type = .none,
@@ -93,7 +91,7 @@ pub const Lexer = struct {
             return out.type;
         }
 
-        var cp = self.wgetc(&out.location);
+        var cp = try self.wgetc(&out.location);
         if (cp == null) {
             out.type = .eof;
             return out.type;
@@ -101,7 +99,7 @@ pub const Lexer = struct {
         const character = cp.?;
         if (character <= 0x7F and std.ascii.isDigit(@intCast(character))) {
             self.push(character, false);
-            self.lexNumber(out);
+            try self.lexNumber(out);
             return .integer;
         }
         if (character <= 0x7F and std.ascii.isAlphabetic(@intCast(character))) {
@@ -117,11 +115,11 @@ pub const Lexer = struct {
                 return .string;
             },
             '.' => {
-                cp = self.next(null, false);
+                cp = try self.next(null, false);
                 std.debug.assert(cp != null);
                 switch (cp.?) {
                     '.' => {
-                        cp = self.next(null, false);
+                        cp = try self.next(null, false);
                         std.debug.assert(cp != null);
                         switch (cp.?) {
                             '.' => out.type = .dot_dot_dot,
@@ -148,19 +146,7 @@ pub const Lexer = struct {
     }
 
     fn clearBuffer(self: *@This()) void {
-        self.buffer_length = 0;
-    }
-
-    fn appendToBuffer(self: *@This(), utf8char: []const u8) void {
-        if (self.buffer_length + utf8char.len >= self.buffer.len) {
-            var buffer_len = self.buffer.len * 2;
-            while (self.buffer_length + utf8char.len >= buffer_len) {
-                buffer_len *= 2;
-            }
-            _ = self.allocator.resize(self.buffer, buffer_len);
-        }
-        std.mem.copyForwards(u8, self.buffer[self.buffer_length..], utf8char);
-        self.buffer_length += utf8char.len;
+        self.buffer.clearRetainingCapacity();
     }
 
     fn printError(self: *@This(), comptime format: []const u8, args: anytype) anyerror!noreturn {
@@ -186,7 +172,7 @@ pub const Lexer = struct {
         }
     }
 
-    fn next(self: *@This(), location: ?*Location, is_buffer: bool) ?u21 {
+    fn next(self: *@This(), location: ?*Location, is_buffer: bool) anyerror!?u21 {
         var character: ?u21 = null;
         if (self.c[0] != null) {
             character = self.c[0];
@@ -213,15 +199,17 @@ pub const Lexer = struct {
             return character;
         }
         var encoded_result = [_]u8{0} ** 4;
-        const length = std.unicode.utf8Encode(character.?, &encoded_result) catch unreachable;
-        self.appendToBuffer(encoded_result[0..length]);
+        const length = try std.unicode.utf8Encode(character.?, &encoded_result);
+        for (encoded_result[0..length]) |char| {
+            try self.buffer.append(char);
+        }
         return character;
     }
 
-    fn wgetc(self: *@This(), location: ?*Location) ?u21 {
+    fn wgetc(self: *@This(), location: ?*Location) !?u21 {
         var cp: ?u21 = null;
         while (true) {
-            cp = self.next(location, false);
+            cp = try self.next(location, false);
             if (cp == null or !std.ascii.isWhitespace(@intCast(cp.?))) {
                 break;
             }
@@ -232,9 +220,9 @@ pub const Lexer = struct {
     fn consume(self: *@This(), n: usize) void {
         var i: usize = 0;
         while (i < n) : (i += 1) {
-            while (true) {
-                self.buffer_length -= 1;
-                if ((self.buffer[self.buffer_length] & 0xC0) != 0x80) {
+            while (self.buffer.items.len != 0) {
+                const item = self.buffer.pop();
+                if ((item & 0xC0) != 0x80) {
                     break;
                 }
             }
@@ -250,8 +238,8 @@ pub const Lexer = struct {
         }
     }
 
-    fn lexNumber(self: *@This(), out: *Token) void {
-        var cp = self.next(&out.location, true);
+    fn lexNumber(self: *@This(), out: *Token) !void {
+        var cp = try self.next(&out.location, true);
         std.debug.assert(cp != null);
         var character = cp.?;
         std.debug.assert(character <= 0x7F and std.ascii.isDigit(@intCast(character)));
@@ -265,24 +253,24 @@ pub const Lexer = struct {
             if (!std.ascii.isDigit(@intCast(character))) {
                 break;
             }
-            cp = self.next(null, true);
+            cp = try self.next(null, true);
         }
         self.push(character, true);
 
         out.value = .{
-            .integer = std.fmt.parseInt(u64, self.buffer[0..self.buffer_length], 10) catch unreachable,
+            .integer = try std.fmt.parseInt(u64, self.buffer.items, 10),
         };
         out.type = .integer;
         self.clearBuffer();
     }
 
     fn lexName(self: *@This(), out: *Token) anyerror!void {
-        var cp = self.next(&out.location, true);
+        var cp = try self.next(&out.location, true);
         std.debug.assert(cp != null);
         var character = cp.?;
         std.debug.assert(character <= 0x7F and std.ascii.isAlphabetic(@intCast(character)));
         while (cp != null) {
-            cp = self.next(&out.location, true);
+            cp = try self.next(&out.location, true);
             if (cp) |codepoint| {
                 character = codepoint;
                 if (character > 0x7F or (!std.ascii.isAlphanumeric(@intCast(character)) and character != '_')) {
@@ -294,19 +282,19 @@ pub const Lexer = struct {
 
         out.type = .name;
         out.value = .{
-            .name = try self.allocator.dupe(u8, self.buffer[0..self.buffer_length]),
+            .name = try self.allocator.dupe(u8, self.buffer.items),
         };
         self.clearBuffer();
     }
 
     fn lexRune(self: *@This()) anyerror![]const u8 {
-        const cp = self.next(null, false);
+        const cp = try self.next(null, false);
         std.debug.assert(cp != null);
         var character = cp.?;
 
         switch (character) {
             '\\' => {
-                character = self.next(null, false).?;
+                character = (try self.next(null, false)).?;
                 switch (character) {
                     // '0', 'a' => {
                     //     return "\\0";
@@ -347,26 +335,26 @@ pub const Lexer = struct {
             },
             else => {
                 var encoded_result = [_]u8{0} ** 4;
-                const length = std.unicode.utf8Encode(cp.?, &encoded_result) catch unreachable;
+                const length = try std.unicode.utf8Encode(character, &encoded_result);
                 return encoded_result[0..length];
             }, // TODO
         }
     }
 
     fn lexString(self: *@This(), out: *Token) anyerror!void {
-        var cp = self.next(&out.location, true);
+        var cp = try self.next(&out.location, false);
         std.debug.assert(cp != null);
         var character = cp.?;
 
         switch (character) {
             '<' => {
                 var count: usize = 1;
-                cp = self.next(null, false);
-                character = cp.?;
                 while (true) {
+                    cp = try self.next(null, false);
                     if (cp == null) {
                         try self.printError("Unexpected end of file", .{});
                     }
+                    character = cp.?;
                     if (character == '<') {
                         count += 1;
                     } else if (character == '>' and count == 1) {
@@ -376,13 +364,13 @@ pub const Lexer = struct {
                     }
                     self.push(character, false);
                     const utf8Char = try self.lexRune();
-                    self.appendToBuffer(utf8Char);
-                    cp = self.next(null, false);
-                    character = cp.?;
+                    for (utf8Char) |char| {
+                        try self.buffer.append(char);
+                    }
                 }
                 out.type = .string;
                 out.value = .{
-                    .string = try self.allocator.dupe(u8, self.buffer[0..self.buffer_length]),
+                    .string = try self.allocator.dupe(u8, self.buffer.items),
                 };
                 self.clearBuffer();
                 return;

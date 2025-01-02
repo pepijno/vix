@@ -112,7 +112,7 @@ pub const Parser = struct {
                 const name = try self.allocator.dupe(u8, token.value.name);
                 try element.value.property_access.append(name);
                 var token2 = Token.initEmpty();
-                loop: while (true) {
+                while (true) {
                     const token_type2 = try self.lexer.lex(&token2);
                     switch (token_type2) {
                         .dot => {
@@ -122,7 +122,7 @@ pub const Parser = struct {
                         },
                         else => {
                             self.lexer.unlex(&token2);
-                            break :loop;
+                            break;
                         },
                     }
                 }
@@ -131,12 +131,12 @@ pub const Parser = struct {
                 element.value = .{
                     .properties = std.ArrayList(*AstProperty).init(self.allocator),
                 };
-                loop: while (true) {
+                while (true) {
                     var token2 = Token.initEmpty();
                     const token_type2 = try self.lexer.lex(&token2);
                     switch (token_type2) {
                         .close_brace => {
-                            break :loop;
+                            break;
                         },
                         else => {
                             self.lexer.unlex(&token2);
